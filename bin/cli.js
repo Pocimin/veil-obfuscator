@@ -22,9 +22,15 @@ Options:
   --no-dead-code          Disable dead-code injection
   --no-debug-protection   Disable debugger trap
   --no-self-defending     Disable self-defending
-  --domain <host>         Lock output to a hostname (repeatable)
-  --disable-console       Wipe console methods
-  -h, --help              Show this help
+    --domain <host>         Lock output to a hostname (repeatable)
+    --disable-console       Wipe console methods
+    --vm-bytecode-encoding  Encrypt the VM bytecode blob
+    --vm-stateful-opcodes   Position-dependent opcode mapping
+    --vm-macro-ops          Fuse repeated instruction pairs into macros
+    --vm-decoy-opcodes      Inject fake opcode handlers
+    --vm-debug-protection   Multi-layered anti-debug (VM)
+    --vm-self-defending     Multi-layered tamper detection (VM)
+    -h, --help              Show this help
 `);
 }
 
@@ -60,6 +66,24 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--disable-console":
       options.disableConsole = true;
+      break;
+    case "--vm-bytecode-encoding":
+      options.vmBytecodeEncoding = true;
+      break;
+    case "--vm-stateful-opcodes":
+      options.vmStatefulOpcodes = true;
+      break;
+    case "--vm-macro-ops":
+      options.vmMacroOps = true;
+      break;
+    case "--vm-decoy-opcodes":
+      options.vmDecoyOpcodes = true;
+      break;
+    case "--vm-debug-protection":
+      options.vmDebugProtection = true;
+      break;
+    case "--vm-self-defending":
+      options.vmSelfDefending = true;
       break;
     case "--domain":
       (options.domainLock ??= []).push(args[++i]);

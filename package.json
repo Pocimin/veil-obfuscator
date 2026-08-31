@@ -14,6 +14,7 @@
   "scripts": {
     "test": "node test/run.js",
     "demo": "node test/run.js",
+    "test-vm": "node test/vm-hardening.js",
     "serve": "node src/server.js"
   },
   "keywords": [

@@ -23,9 +23,13 @@ self-defending) and an optional **bytecode VM** mode.
     that rename/shape it trip an infinite-loop break.
   - *Domain lock* (optional): output only runs on whitelisted hostnames.
   - *Console wipe* (optional).
-- **VM mode (experimental)** — compiles a value-producing program into a packed
-  bytecode stream interpreted by a stack machine, so static dumps show only the
-  interpreter, not your logic.
+- **VM mode (experimental)** — compiles a value-producing program into bytecode
+  interpreted by a stack machine, so static dumps show only the interpreter,
+  not your logic. VM hardening: `vmBytecodeEncoding` (encrypted blob + key-getter),
+  `vmStatefulOpcodes` (position-dependent opcode mapping), `vmMacroOps` (fused
+  instructions), `vmDecoyOpcodes` (fake opcode handlers), `vmDebugProtection`
+  (multi-layered anti-debug) and `vmSelfDefending` (bytecode/table checksums +
+  anti-hook — tampering spins forever). See `EXPERIMENTAL.md`.
 
 ---
 

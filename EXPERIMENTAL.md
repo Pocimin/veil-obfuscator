@@ -1,8 +1,29 @@
-# VM mode — supported subset & roadmap
+# VM mode — hardening, supported subset & roadmap
 
-The VM core (`src/vm/compile.js`) is intentionally small right now. It compiles
-**value-producing programs** only, so the whole thing is a correct, small,
-auditable stack machine.
+The VM core (`src/vm/compile.js`) compiles **value-producing programs** into an
+instruction stream run by a stack-machine interpreter, then layers hardening on
+top. Everything behind a `vm*` option.
+
+## VM hardening (all implemented)
+
+| Option                | What it does                                                        |
+|-----------------------|---------------------------------------------------------------------|
+| `vmBytecodeEncoding`  | The instruction stream ships as an encrypted blob; decrypted at load via a `String.fromCharCode` key-getter (JSON + XOR + base64). No literal code array in the source. |
+| `vmStatefulOpcodes`   | Opcodes are masked with a position-dependent key (`keyAt(pc)`), so the same number means different things at different program points. |
+| `vmMacroOps`          | Common instruction triplets are fused into a single macro (e.g. `PUSH a, PUSH b, ADD` → `MACRO_PUSH_ADD a b`), shrinking the dispatch surface. |
+| `vmDecoyOpcodes`      | Injects fake opcode handlers into the switch that never run legitimately, misleading a reader about the real opcode set. |
+| `vmDebugProtection`   | Multi-layered anti-debug / anti-analysis: `debugger` timing traps (x2) plus a DevTools-open size heuristic. Browser layers are gated so output still exits cleanly under Node. |
+| `vmSelfDefending`     | Multi-layered tamper detection: runtime FNV-1a checksums of the decrypted bytecode and the string table, plus anti-hooking of `Array.prototype.pop` / `Array.isArray`. Any tampered bytecode spins forever. |
+
+Enable individually or via the `vm` / `max` presets. CLI flags: `--vm-bytecode-encoding`, `--vm-stateful-opcodes`, `--vm-macro-ops`, `--vm-decoy-opcodes`, `--vm-debug-protection`, `--vm-self-defending`.
+
+Tamper behavior (verified):
+- Edit the encrypted blob → the load crashes (invalid JSON) or the checksum spins.
+- Edit a decrypted/valid operand → `vmSelfDefending` detects the FNV mismatch and spins.
+
+## Supported subset
+
+The VM still compiles **value-producing programs** only:
 
 ## Supported today
 
@@ -32,4 +53,6 @@ Current behavior on unsupported input: **throws a clear compile-time error**
 3. String-array reuse: the VM string table should flow through the same
    rc4/base64 encoding as `stringArray` instead of plaintext.
 4. Register spilling + shared-array cache to shrink bytecode.
-5. Bytecode encryption keyed at build time.
+5. Instruction reordering / `vmJumpsEncoding` (runtime-computed jump targets).
+6. `vmRenameGlobals` / property mangling inside the VM (currently the VM
+   preserves original identifier names in register slots).

@@ -1,23 +1,23 @@
 import * as walk from "acorn-walk";
 
 /**
- * Experimental bytecode VM core.
+ * Bytecode VM core with hardening passes.
  *
- * The VM compiles a *value-producing program* (top-level expression
- * statements / simple var arithmetic + string-array lookups) into a packed
- * instruction stream and interprets it with a stack machine. Because the
- * real logic lives in a data array + interpreter, static dump-and-beautify
- * produces only the interpreter, not your code.
+ * The VM compiles a value-producing program into an instruction stream run by
+ * a stack machine. Hardening (each behind its own option):
  *
- * Supported subset:
- *   - Literal numbers / booleans / strings
- *   - BinaryExpression: + - * / % === < > & | << >>
- *   - LogicalExpression: && || ; UnaryExpression: !
- *   - Identifier (as a register), simple MemberExpression get
- *   - VariableDeclaration (var) + ReturnStatement
- *
- * Anything else is rejected with a clear error. Host (browser/global) calls
- * are intentionally NOT supported yet — see EXPERIMENTAL.md.
+ *   vmBytecodeEncoding   — the instruction stream ships as an encrypted blob;
+ *                          decrypted at load via a key-getter (JSON+XOR+base64).
+ *   vmStatefulOpcodes    — opcodes are masked by a position-dependent key, so
+ *                          the same number means different things at different
+ *                          program points.
+ *   vmMacroOps           — common instruction pairs are fused into macros.
+ *   vmDecoyOpcodes       — fake opcode handlers + decoy operators that never
+ *                          run legitimately.
+ *   vmDebugProtection    — multi-layered anti-debug / anti-hook (gated so it is
+ *                          Node-safe and does not keep the process alive).
+ *   vmSelfDefending      — runtime checksums of the bytecode + string table;
+ *                          tampering spins forever, anti-hooking a probe fn.
  */
 
 const OP = {
@@ -46,19 +46,24 @@ const OP = {
   RETURN: 23,
 };
 
+// Fused macros (values must not collide with real opcodes).
+const MACRO = {
+  PUSH_ADD: 100,
+  PUSH_SUB: 101,
+  PUSH_MUL: 102,
+};
+
+const OPERAND_COUNT = {
+  1: 1, 2: 1, 3: 1, 4: 1,
+  5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0,
+  16: 0, 17: 0, 18: 0, 19: 0, 20: 1, 21: 1, 22: 1, 23: 0,
+  100: 2, 101: 2, 102: 2, // fused macros: op + 2 operands
+};
+
 const BINMAP = {
-  "+": OP.ADD,
-  "-": OP.SUB,
-  "*": OP.MUL,
-  "/": OP.DIV,
-  "%": OP.MOD,
-  "===": OP.EQ_STRICT,
-  "<": OP.LT,
-  ">": OP.GT,
-  "&": OP.BIT_AND,
-  "|": OP.BIT_OR,
-  "<<": OP.SHL,
-  ">>": OP.SHR,
+  "+": OP.ADD, "-": OP.SUB, "*": OP.MUL, "/": OP.DIV, "%": OP.MOD,
+  "===": OP.EQ_STRICT, "<": OP.LT, ">": OP.GT,
+  "&": OP.BIT_AND, "|": OP.BIT_OR, "<<": OP.SHL, ">>": OP.SHR,
 };
 
 export function vmize(program, opts) {
@@ -73,7 +78,8 @@ export function vmize(program, opts) {
 
   c.stringTable = [...strings.keys()];
   c.compileStatements(program.body);
-  return wrapVM(c);
+
+  return wrapVM(c, opts);
 }
 
 class Compiler {
@@ -171,50 +177,274 @@ function unsupported(msg) {
   throw new Error(`veil-vm: unsupported ${msg}.`);
 }
 
-function wrapVM(c) {
-  // Flatten [op, operand?, op, operand?, ...] so the interpreter can consume
-  // operands sequentially via pc++.
-  const code = JSON.stringify(c.code.flat());
+/* ------------------------------------------------------------------ */
+/* Build-side passes                                                   */
+/* ------------------------------------------------------------------ */
+
+// Position-dependent opcode key: identical between builder and runtime.
+function keyAt(i) {
+  const k = Math.imul(i | 0, 2654435761) >>> 0;
+  return ((k ^ (k >>> 16)) & 255) >>> 0;
+}
+
+function toFlat(instrs) {
+  const flat = [];
+  for (const ins of instrs) {
+    for (const v of ins) flat.push(v);
+  }
+  return flat;
+}
+
+function fuseMacros(flat) {
+  const out = [];
+  for (let i = 0; i < flat.length; ) {
+    // Pattern: PUSH_NUM a, PUSH_NUM b, BINOP  -> MACRO_PUSH_OP a b
+    const isPushNum = (p) => flat[p] === OP.PUSH_NUM;
+    const isBin = (v) => v === OP.ADD || v === OP.SUB || v === OP.MUL;
+    if (
+      isPushNum(i) && isPushNum(i + 2) && isBin(flat[i + 4])
+    ) {
+      const a = flat[i + 1];
+      const b = flat[i + 3];
+      const bin = flat[i + 4];
+      const macro = bin === OP.ADD ? MACRO.PUSH_ADD : bin === OP.SUB ? MACRO.PUSH_SUB : MACRO.PUSH_MUL;
+      out.push(macro, a, b);
+      i += 5;
+    } else {
+      out.push(flat[i]);
+      i++;
+    }
+  }
+  return out;
+}
+
+function maskOps(flat) {
+  const out = [];
+  let idx = 0;
+  while (idx < flat.length) {
+    const raw = flat[idx];
+    const masked = (raw ^ keyAt(idx)) >>> 0;
+    out.push(masked);
+    idx++;
+    const count = OPERAND_COUNT[raw];
+    for (let k = 0; k < (count || 0); k++) out.push(flat[idx++]);
+  }
+  return out;
+}
+
+function fnv(arr) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < arr.length; i++) {
+    h = (h ^ arr[i]) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Bytecode encryption (build-side)                                    */
+/* ------------------------------------------------------------------ */
+
+const B64_STD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function b64FromBytes(bytes) {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+    out += B64_STD[b0 >> 2];
+    out += B64_STD[((b0 & 3) << 4) | (b1 === undefined ? 0 : b1 >> 4)];
+    if (b1 === undefined) { out += "=="; break; }
+    out += B64_STD[((b1 & 15) << 2) | (b2 === undefined ? 0 : b2 >> 6)];
+    if (b2 === undefined) out += "="; else out += B64_STD[b2 & 63];
+  }
+  return out;
+}
+
+function xorCipher(str, key) {
+  const bytes = [];
+  for (let i = 0; i < str.length; i++) {
+    bytes.push(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  }
+  return bytes;
+}
+
+function randKey() {
+  let k = "veilVM";
+  for (let i = 0; i < 14; i++) k += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+  return k;
+}
+
+function randName() {
+  return "_0x" + ((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0");
+}
+
+/* ------------------------------------------------------------------ */
+/* Emit                                                               */
+/* ------------------------------------------------------------------ */
+
+function wrapVM(c, opts) {
+  if (!opts) opts = {};
+
+  let flat = toFlat(c.code);
+
+  const useMacro = !!opts.vmMacroOps;
+  if (useMacro) flat = fuseMacros(flat);
+
+  const useStateful = !!opts.vmStatefulOpcodes;
+  const masked = useStateful ? maskOps(flat) : flat;
+
+  const useEncrypt = !!opts.vmBytecodeEncoding;
+  const key = randKey();
+  const keyGetter = `String.fromCharCode(${[...key].map((ch) => ch.charCodeAt(0)).join(",")})`;
+
+  // Serialize the final (masked) stream. If encrypted, ship a base64 blob.
+  const serial = JSON.stringify(masked);
+  let codeExpr;
+  if (useEncrypt) {
+    const blob = b64FromBytes(xorCipher(serial, key));
+    codeExpr = `JSON.parse(_0xdec("${blob}", _0xkey))`;
+  } else {
+    codeExpr = JSON.stringify(masked);
+  }
+
   const table = JSON.stringify(c.stringTable);
   const slots = c.slotCount;
 
-  return `
-(function(){
-  var _0xcode = ${code};
-  var _0xstr = ${table};
-  var _0xR = new Array(${slots});
-  var _0xS = [];
-  var pc = 0, op, a, b;
-  while (pc < _0xcode.length){
-    op = _0xcode[pc++];
-    switch (op){
-      case 1: _0xS.push(_0xcode[pc++]); break;
-      case 2: _0xS.push(!!_0xcode[pc++]); break;
-      case 3: _0xS.push(_0xstr[_0xcode[pc++]]); break;
-      case 4: _0xS.push(_0xcode[pc++]); break;
-      case 5: b=_0xS.pop();a=_0xS.pop();_0xS.push(a+b);break;
-      case 6: b=_0xS.pop();a=_0xS.pop();_0xS.push(a-b);break;
-      case 7: b=_0xS.pop();a=_0xS.pop();_0xS.push(a*b);break;
-      case 8: b=_0xS.pop();a=_0xS.pop();_0xS.push(a/b);break;
-      case 9: b=_0xS.pop();a=_0xS.pop();_0xS.push(a%b);break;
-      case 10: b=_0xS.pop();a=_0xS.pop();_0xS.push(a===b);break;
-      case 11: b=_0xS.pop();a=_0xS.pop();_0xS.push(a<b);break;
-      case 12: b=_0xS.pop();a=_0xS.pop();_0xS.push(a>b);break;
-      case 13: b=_0xS.pop();a=_0xS.pop();_0xS.push(a&&b);break;
-      case 14: b=_0xS.pop();a=_0xS.pop();_0xS.push(a||b);break;
-      case 15: a=_0xS.pop();_0xS.push(!a);break;
-      case 16: b=_0xS.pop();a=_0xS.pop();_0xS.push(a&b);break;
-      case 17: b=_0xS.pop();a=_0xS.pop();_0xS.push(a|b);break;
-      case 18: b=_0xS.pop();a=_0xS.pop();_0xS.push(a<<b);break;
-      case 19: b=_0xS.pop();a=_0xS.pop();_0xS.push(a>>b);break;
-      case 20: _0xS.push(_0xR[_0xcode[pc++]]); break;
-      case 21: _0xR[_0xcode[pc++]] = _0xS.pop(); break;
-      case 22: a=_0xS.pop(); _0xS.push(a[_0xcode[pc++]]); break;
-      case 23: return _0xS.pop();
-      default: return _0xS.pop();
+  // Build the switch cases (standard + macro + decoy).
+  const cases = [];
+  const add = (num, body) => cases.push(`case ${num}: ${body} break;`);
+  add(OP.PUSH_NUM, "_0xS.push(_0xcode[pc++]);");
+  add(OP.PUSH_BOOL, "_0xS.push(!!_0xcode[pc++]);");
+  add(OP.PUSH_STRARRAY, "_0xS.push(_0xstr[_0xcode[pc++]]);");
+  add(OP.PUSH_STR, "_0xS.push(_0xcode[pc++]);");
+  add(OP.ADD, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a+b);");
+  add(OP.SUB, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a-b);");
+  add(OP.MUL, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a*b);");
+  add(OP.DIV, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a/b);");
+  add(OP.MOD, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a%b);");
+  add(OP.EQ_STRICT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a===b);");
+  add(OP.LT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a<b);");
+  add(OP.GT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a>b);");
+  add(OP.LAND, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a&&b);");
+  add(OP.LOR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a||b);");
+  add(OP.NOT, "a=_0xS.pop();_0xS.push(!a);");
+  add(OP.BIT_AND, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a&b);");
+  add(OP.BIT_OR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a|b);");
+  add(OP.SHL, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a<<b);");
+  add(OP.SHR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a>>b);");
+  add(OP.LOAD, "_0xS.push(_0xR[_0xcode[pc++]]);");
+  add(OP.STORE, "_0xR[_0xcode[pc++]]=_0xS.pop();");
+  add(OP.GET, "a=_0xS.pop();_0xS.push(a[_0xcode[pc++]]);");
+
+  if (useMacro) {
+    add(MACRO.PUSH_ADD, "_0xS.push(_0xcode[pc++]+_0xcode[pc++]);");
+    add(MACRO.PUSH_SUB, "_0xS.push(_0xcode[pc++]-_0xcode[pc++]);");
+    add(MACRO.PUSH_MUL, "_0xS.push(_0xcode[pc++]*_0xcode[pc++]);");
+  }
+
+  // Decoy opcodes: fake handlers that never legitimately run.
+  if (opts.vmDecoyOpcodes) {
+    const decoys = [87, 176, 209, 250, 38, 145];
+    for (let i = 0; i < decoys.length; i++) {
+      const n = decoys[i];
+      add(n, `_0xS.push(0x${(0xdead00 + i).toString(16)});`); // garbage pushed (unreachable)
     }
   }
-  return _0xS.pop();
-})();
-`.trim();
+
+  const readOp = useStateful
+    ? `var _0xi = pc; op = ((_0xcode[_0xi] ^ keyAt(_0xi)) >>> 0); pc++;`
+    : `op = _0xcode[pc++];`;
+
+  const codeChecksum = fnv(masked);
+  const tableChecksum = fnvStr(c.stringTable.join(""));
+
+  const selfDef = opts.vmSelfDefending
+    ? `
+  if (fnv(_0xcode) !== ${codeChecksum}) return _0xspin();
+  if (fnvs(_0xstr.join("")) !== ${tableChecksum}) return _0xspin();
+  try {
+    if (String(Function.prototype.toString.call(Array.prototype.pop)).indexOf('[native code]') < 0) return _0xspin();
+    if (String(Array.isArray).indexOf('isArray') < 0) return _0xspin();
+  } catch (_0xe) {}
+`
+    : "";
+
+  // Multi-layered anti-debug / anti-analysis. Layers gated so the output still
+  // exits cleanly under Node (tests) yet trips in a browser with devtools open.
+  const debugDef = opts.vmDebugProtection
+    ? `
+  try {
+    var _0xclk = (typeof performance !== 'undefined' && performance.now) ? {now:function(){return performance.now();}} : {now:function(){return Date.now();}};
+    var _0xt0 = _0xclk.now();
+    debugger;
+    if (_0xclk.now() - _0xt0 > 100) return _0xspin();
+    var _0xt1 = _0xclk.now();
+    debugger;
+    if (_0xclk.now() - _0xt1 > 100) return _0xspin();
+  } catch (_0xe) {}
+  if (typeof window !== 'undefined') {
+    var _0xw = window.outerWidth - window.innerWidth;
+    if (_0xw > 160 || (window.outerHeight - window.innerHeight) > 160) return _0xspin();
+  }
+`
+    : "";
+
+  const spinFn = `
+  function _0xspin(){ while (true) {} }
+`;
+
+  const b64src = `
+  function _0xdec(str,k){
+    var C='${B64_STD}',b=0,bs=0,out=[];
+    var clean=str.replace(/=+$/,'');
+    for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
+      b=(b<<6)|v; bs+=6; if(bs>=8){ bs-=8; out.push((b>>bs)&255); } }
+    for(i=0;i<out.length;i++){ out[i]=String.fromCharCode(out[i]^k.charCodeAt(i%k.length)); }
+    return out.join('');
+  }
+`;
+
+  const keyAtSrc = `
+  function keyAt(i){ var k=Math.imul(i|0,2654435761)>>>0; return ((k^(k>>>16))&255)>>>0; }
+`;
+
+  const fnvSrc = `
+  function fnv(arr){ var h=0x811c9dc5; for(var i=0;i<arr.length;i++){ h=(h^arr[i])>>>0; h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
+  function fnvs(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h=(h^s.charCodeAt(i))>>>0; h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
+`;
+
+function fnvStr(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h = (h ^ s.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+  const tableDecode = useEncrypt
+    ? `var _0xkey = ${keyGetter};\n${b64src}`
+    : "";
+
+  return `(function(){
+${tableDecode}
+${keyAtSrc}
+${fnvSrc}
+${spinFn}
+var _0xcode = ${codeExpr};
+var _0xstr = ${table};
+var _0xR = new Array(${slots});
+var _0xS = [];
+var pc = 0, op, a, b;
+${debugDef}
+${selfDef}
+while (pc < _0xcode.length){
+  ${readOp}
+  switch (op){
+${cases.join("\n")}
+    default: return _0xS.pop();
+  }
+}
+return _0xS.pop();
+})();`.trim();
 }
