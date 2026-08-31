@@ -1,0 +1,33 @@
+{
+  "name": "veil-obfuscator",
+  "version": "0.1.0",
+  "description": "Configurable JavaScript obfuscator: string-array encoding, control-flow flattening, dead-code injection, dump protection (self-defending + debugger trap) and an optional bytecode VM mode.",
+  "type": "module",
+  "bin": {
+    "veil": "./bin/cli.js"
+  },
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./presets": "./src/presets.js"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "demo": "node test/run.js",
+    "serve": "node src/server.js"
+  },
+  "keywords": [
+    "obfuscator",
+    "javascript",
+    "obfuscation",
+    "vm",
+    "anti-debug",
+    "self-defending"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.11.3",
+    "acorn-walk": "^8.3.2",
+    "astring": "^1.8.6"
+  }
+}

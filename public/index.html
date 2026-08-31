@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Veil · JS Obfuscator</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">▛▞</span>
+      <h1>veil</h1>
+      <span class="tag">JS obfuscator · dump protection</span>
+    </div>
+    <div class="actions">
+      <label class="preset">
+        Preset
+        <select id="preset">
+          <option value="balanced" selected>balanced</option>
+          <option value="light">light</option>
+          <option value="max">max</option>
+          <option value="vm">vm</option>
+        </select>
+      </label>
+      <button id="run" class="primary">Obfuscate</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="col input-col">
+      <h2><span class="dot in"></span> input</h2>
+      <textarea id="source" spellcheck="false" placeholder="// paste your JavaScript here
+function greet(name){ return 'Hello, ' + name; }"></textarea>
+    </section>
+
+    <aside class="col options-col">
+      <h2><span class="dot"></span> options</h2>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" id="o-stringArray" checked /> string-array</label>
+        <label class="opt"><input type="checkbox" id="o-controlFlow" checked /> control-flow flatten</label>
+        <label class="opt"><input type="checkbox" id="o-deadCode" checked /> dead-code</label>
+        <label class="opt"><input type="checkbox" id="o-debugProtection" checked /> debugger trap</label>
+        <label class="opt"><input type="checkbox" id="o-selfDefending" checked /> self-defending</label>
+        <label class="opt"><input type="checkbox" id="o-vm" /> VM mode</label>
+        <label class="opt">
+          <input type="checkbox" id="o-domainLock" /> domain lock
+          <input type="text" id="domain" class="mini" placeholder="example.com" />
+        </label>
+        <label class="opt"><input type="checkbox" id="o-disableConsole" /> wipe console</label>
+      </div>
+      <div class="prose">
+        <strong>string-array threshold</strong>
+        <input type="range" id="threshold" min="0" max="1" step="0.05" value="0.8" />
+        <span id="thresholdVal" class="val">0.80</span>
+      </div>
+    </aside>
+
+    <section class="col output-col">
+      <h2><span class="dot out"></span> output
+        <button id="copy" class="ghost">copy</button>
+        <span class="stats" id="stats"></span>
+      </h2>
+      <textarea id="output" readonly spellcheck="false" placeholder="obfuscated output appears here"></textarea>
+      <div id="warnings" class="warnings"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>veil-obfuscator · MIT · server-side</span>
+    <span class="fb" id="fb"></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
