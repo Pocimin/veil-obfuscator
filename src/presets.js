@@ -29,11 +29,12 @@ export const PRESETS = {
     vm: false,
   },
 
-  // Maximum hardening. Fully self-defending + bytecode VM.
+  // Maximum hardening. Fully self-defending + bytecode VM + anti-dump gate.
   max: {
     stringArray: true,
     stringArrayEncoding: ["rc4", "base64"],
     stringArrayThreshold: 1,
+    stringArrayGate: true,
     rotateStringArray: true,
     shuffleStringArray: true,
     controlFlowFlattening: 1,

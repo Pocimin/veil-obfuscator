@@ -117,13 +117,18 @@ function base64Decode(str) {
  *   perm        — baked permutation: box[perm[i]] holds decoded string i
  *   magic       — xor mask applied to the opaque index in `fnName`
  *   raw         — ciphertext array (logical order)
+ *   gate        — (optional) a JS expression string evaluated at load; if it is
+ *                 falsy, the loader stops decoding and `gateFail` (default a
+ *                 NUL char) is stored instead. Use it to make a dump/run in the
+ *                 wrong host yield garbage rather than plaintext (anti-dump).
+ *   gateFail    — (optional) the corrupt value returned when `gate` is falsy.
  *
  * Every string in `raw` is only recoverable by executing the (function(){})(),
  * and the key travels as char-codes, not a literal sitting next to the cipher.
  * Index recovery requires both `perm` and `magic` and is deferred to runtime.
  */
 export function runtimeDecoderSource(ctx) {
-  const { arrayName, fnName, encodings, key, perm, magic, raw } = ctx;
+  const { arrayName, fnName, encodings, key, perm, magic, raw, gate, gateFail } = ctx;
 
   const steps = [];
   for (const enc of [...encodings].reverse()) {
@@ -136,7 +141,48 @@ export function runtimeDecoderSource(ctx) {
   const permJson = JSON.stringify(perm);
   const rawJson = JSON.stringify(raw);
 
+  // Host-fingerprint helpers. `_hQ` yields a truthy probe in the intended host
+  // (a browser) and falsy elsewhere; `_hostoff` returns 0 in the intended host
+  // and a nonzero offset elsewhere, so the accessor mask is *derived at runtime*
+  // and wrong-host dumps resolve to garbage, not plaintext (anti-dump).
+  //
+  // Both only do something when `gate` is enabled; otherwise they are inert so
+  // the output still decodes correctly in any host (needed for Node-based tests
+  // and for the non-gated default path).
+  // `gate` may be:
+  //   false/undefined → inert (strings correct in any host; default for tests)
+  //   a string        → a CUSTOM probe expression (truthy => correct decode)
+  //   true/"default"  → the DEFAULT host fingerprint (browser-only; Node dumps
+  //                     get garbage, and the accessor mask derives from _hostoff)
+  const gateMode = gate ? (typeof gate === "string" ? "custom" : "default") : "off";
+
+  const hostoffSrc =
+    gateMode === "default"
+      ? `function _hostoff(){ var o=0; try{ if(typeof window==='object'&&window)o++; if(typeof document==='object'&&document)o++; if(typeof navigator==='object'&&navigator)o++; }catch(${n("_e")}){} return (3-o)&0xff; }
+function _hQ(){ return typeof window!=='undefined'&&typeof document!=='undefined'; }`
+      : `function _hostoff(){ return 0; }
+function _hQ(){ return ${gateMode === "custom" ? `(${gate})` : "1"}; }`;
+
+  const gateDef = gateMode !== "off"
+    ? `  var _G = _hQ() ? 1 : 0;\n  var _R = ${JSON.stringify(gateFail ?? "\u0000")};`
+    : "";
+
+  const loop = gateMode !== "off"
+    ? `  for (var _i=0;_i<_POOL.length;_i++){
+    var v = _POOL[_i];
+    if(_G){
+          ${chain}
+    } else { v = _R; }
+    _B[_PERM[_i]] = v;
+  }`
+    : `  for (var _i=0;_i<_POOL.length;_i++){
+    var v = _POOL[_i];
+          ${chain}
+    _B[_PERM[_i]] = v;
+  }`;
+
   return `
+${hostoffSrc}
 var ${arrayName} = (function(){
   var _KEY = String.fromCharCode(${keyCodes});
   var _POOL = ${rawJson};
@@ -157,15 +203,16 @@ var ${arrayName} = (function(){
     return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
   }
   var _B = [];
-  for (var _i=0;_i<_POOL.length;_i++){
-    var v = _POOL[_i];
-          ${chain}
-    _B[_PERM[_i]] = v;
-  }
+${gateDef}
+${loop}
   return _B;
 })();
-function ${fnName}(_i){ return ${arrayName}[ _i ^ ${magic} ]; }
+function ${fnName}(_i){ var _0xM = ((${magic} ^ _hostoff()) >>> 0); return ${arrayName}[ _i ^ _0xM ]; }
 `;
+}
+
+function n(name) {
+  return name;
 }
 
 function utf8Decode(bytes) {

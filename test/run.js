@@ -71,5 +71,40 @@ try {
   check("balanced: output is valid JS", false, e.message);
 }
 
+// 6. Runtime-gated decode: a probe that's truthy in this (Node) host decodes
+//    fine, so behavior is preserved. `String(1) === '1'` is true everywhere.
+try {
+  const { code } = obfuscate(sample, {
+    preset: "light",
+    stringArrayThreshold: 1,
+    debugProtection: false,
+    selfDefending: false,
+    stringArrayGate: "String(1) === '1'",
+  });
+  const logs = run(code);
+  check("gate: truthy probe preserves behavior", JSON.stringify(logs) === JSON.stringify(["Hello, world", "veil says: Hello, world"]), JSON.stringify(logs));
+} catch (e) {
+  check("gate: truthy probe preserves behavior", false, e.message);
+}
+
+// 7. Runtime-gated decode: a falsy probe (browser-only, so it fails under
+//    Node) must NOT leak plaintext — the decoder stores the corrupted gateFail.
+try {
+  const { code } = obfuscate(sample, {
+    preset: "light",
+    stringArrayThreshold: 1,
+    debugProtection: false,
+    selfDefending: false,
+    stringArrayGate: "typeof document !== 'undefined'",
+  });
+  const leaksPlain = code.includes('"Hello, "') || code.includes(`"veil says:"`);
+  let logs = null;
+  try { logs = run(code); } catch (e) { logs = "[runtime threw: " + e.message + "]"; }
+  const corrupted = !leaksPlain && logs !== null && JSON.stringify(logs) !== JSON.stringify(["Hello, world", "veil says: Hello, world"]);
+  check("gate: falsy probe corrupts strings (anti-dump)", corrupted, JSON.stringify(logs));
+} catch (e) {
+  check("gate: falsy probe corrupts strings (anti-dump)", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

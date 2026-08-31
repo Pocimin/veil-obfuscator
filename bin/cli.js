@@ -22,8 +22,15 @@ Options:
   --no-dead-code          Disable dead-code injection
   --no-debug-protection   Disable debugger trap
   --no-self-defending     Disable self-defending
-    --domain <host>         Lock output to a hostname (repeatable)
+    --string-array-gate <expr>
+                          Only decode strings when <expr> is truthy at load
+                          in the target host (anti-dump). Use e.g.
+                          'typeof document !== "undefined"' for a browser.
+    --string-array-gate-fail <str>
+                          Value stored instead of decoded strings when the
+                          gate is falsy (default: a NUL byte).
     --disable-console       Wipe console methods
+    --runtime-gate          Gate string decoding behind a host fingerprint (anti-dump)
     --vm-bytecode-encoding  Encrypt the VM bytecode blob
     --vm-stateful-opcodes   Position-dependent opcode mapping
     --vm-macro-ops          Fuse repeated instruction pairs into macros
@@ -64,8 +71,17 @@ for (let i = 0; i < args.length; i++) {
     case "--no-self-defending":
       options.selfDefending = false;
       break;
+    case "--string-array-gate":
+      options.stringArrayGate = args[++i];
+      break;
+    case "--string-array-gate-fail":
+      options.stringArrayGateFail = args[++i];
+      break;
     case "--disable-console":
       options.disableConsole = true;
+      break;
+    case "--runtime-gate":
+      options.stringArrayGate = true;
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

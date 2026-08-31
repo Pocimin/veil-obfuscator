@@ -91,6 +91,7 @@ export function applyStringArray(program, opts) {
     perm,
     magic,
     raw,
+    gate: opts.stringArrayGate,
   });
 
   const decoderAst = parse(decoderSource, { target: "script" });

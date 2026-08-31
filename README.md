@@ -13,6 +13,17 @@ self-defending) and an optional **bytecode VM** mode.
 - **String-array encoding** — strings are hoisted into an encoded array and
   decoded at runtime via a self-referencing decoder. Supports `rc4` + `base64`
   layering and array rotation/shuffle.
+  - **Anti-dump gate** — `stringArrayGate` (opt-in): the decoder only runs a
+    host probe; running the output in the wrong host (e.g. `node`-running a
+    browser-targeted build) yields garbage instead of plaintext. Can be a boolean
+    (default browser fingerprint) or a custom probe expression. The accessor mask
+    is derived at runtime (`_0xM = magic ^ _hostoff()`), so there is no static
+    `arr[ i ^ CONST ]` to read the mapping off.
+  - *Anti-dump gate* (`stringArrayGate`): opt-in runtime host probe. The loader
+    only decrypts when the probe is truthy in the target host; otherwise every
+    entry becomes `stringArrayGateFail` (default a NUL byte). A dump/run in the
+    wrong host yields garbage instead of plaintext. Off by default so the Node
+    test harness still self-hosts.
 - **Control-flow flattening** — linear function bodies are rewritten into a
   jump-table dispatcher (semantics-preserving sub-set).
 - **Dead-code injection** — sprinkles never-executed guard blocks that look real.
@@ -53,6 +64,13 @@ Usage: veil <input.js> [-o | --output <out.js>] [options]
   --no-dead-code
   --no-debug-protection
   --no-self-defending
+  --string-array-gate <expr>
+                        Only decode strings when <expr> is truthy at load in
+                        the target host (anti-dump). For a browser target use
+                        e.g. 'typeof document !== "undefined"'.
+  --string-array-gate-fail <str>
+                        Value stored instead of decoded strings when the gate
+                        is falsy (default: a NUL byte).
   --domain <host>       Lock output to a hostname (repeatable).
   --disable-console
   --help

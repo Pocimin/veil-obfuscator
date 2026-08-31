@@ -6,6 +6,16 @@ export const DEFAULT_OPTIONS = {
   stringArrayEncoding: ["rc4"],
   rotateStringArray: true,
   shuffleStringArray: true,
+  stringArrayGate: false,
+
+  // Anti-dump: only decode when a runtime probe passes. Off by default.
+  // stringArrayGate: JS expression evaluated at load in the target host. If it
+  //   is falsy, the loader stores `stringArrayGateFail` (default "\u0000") for
+  //   every entry — a dump/run in the wrong host yields garbage, not plaintext.
+  //   Use e.g. `typeof document !== 'undefined'` for a browser target.
+  //   NOTE: presets keep this off so the Node test harness still self-hosts.
+  stringArrayGate: undefined,
+  stringArrayGateFail: undefined,
 
   controlFlowFlattening: 0.5,
   controlFlowFlatteningThreshold: 0.75,
