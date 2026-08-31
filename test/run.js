@@ -146,5 +146,15 @@ try {
   check("chain+gate: falsy probe corrupts strings", false, e.message);
 }
 
+// 10. Global resolver: references to known globals are routed through a switch,
+//     and no literal global identifier survives in the output.
+try {
+  const { code } = obfuscate('console.log(document.title);', { preset: "light", stringArray: true, stringArrayThreshold: 1, globalResolver: true, renameIdentifiers: false, debugProtection: false, selfDefending: false, deadCodeInjection: 0, controlFlowFlattening: 0 });
+  const noLeak = !/\bconsole\b/.test(code) && !/\bdocument\b/.test(code.replace(/globalThis/, ""));
+  check("globalResolver: globals not greppable", noLeak);
+} catch (e) {
+  check("globalResolver: globals not greppable", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

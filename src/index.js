@@ -6,6 +6,7 @@ import { applyDebugProtection } from "./transforms/debugProtection.js";
 import { applySelfDefending } from "./transforms/selfDefending.js";
 import { applyDomainLock } from "./transforms/domainLock.js";
 import { applyRenameIdentifiers } from "./transforms/renameIdentifiers.js";
+import { applyGlobalResolver } from "./transforms/globalResolver.js";
 import { vmize } from "./vm/compile.js";
 import { PRESETS } from "./presets.js";
 import { mergeOptions } from "./options.js";
@@ -35,6 +36,10 @@ export function obfuscate(source, userOptions = {}) {
   if (opts.vm) {
     // VM mode subsumes the other transforms: the program becomes bytecode.
     return { code: vmize(ast, opts), warnings };
+  }
+
+  if (opts.globalResolver) {
+    ast = applyGlobalResolver(ast, opts);
   }
 
   if (opts.deadCodeInjection > 0) {
