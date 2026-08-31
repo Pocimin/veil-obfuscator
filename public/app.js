@@ -25,6 +25,15 @@ $("threshold").addEventListener("input", () => {
   $("thresholdVal").textContent = Number($("threshold").value).toFixed(2);
 });
 
+// Sync the toggle set to the selected preset so a preset change isn't silently
+// overridden by stale checkbox state (e.g. vm preset with "VM mode" unchecked).
+$("preset").addEventListener("change", () => {
+  const p = $("preset").value;
+  $("o-vm").checked = p === "vm";
+  $("o-debugProtection").checked = p !== "light" && p !== "vm";
+  $("o-selfDefending").checked = p !== "light";
+});
+
 $("copy").addEventListener("click", () => {
   const out = $("output").value;
   if (!out) return;
@@ -61,6 +70,12 @@ $("run").addEventListener("click", async () => {
       $("warnings").textContent = data.warnings.join("\n");
     }
     $("fb").textContent = "✓ done";
+  } catch (e) {
+    // Show the real error rather than swallowing it (e.g. VM rejecting a
+    // program that uses host calls the VM does not compile yet).
+    $("warnings").textContent = String(e.message || e);
+    $("fb").textContent = "✗ error";
+    $("stats").textContent = "";
   } finally {
     btn.disabled = false;
     btn.textContent = "Obfuscate";

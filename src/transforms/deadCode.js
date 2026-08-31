@@ -16,7 +16,12 @@ function lit(n) {
 // but which are guaranteed truthy at runtime in Node *and* browsers, so the
 // enclosed block always executes harmlessly. A strong decompiler can still fold
 // them — that's the accepted ceiling for this class of tool.
-const OPAQUE_PREDICATES = [
+//
+// IMPORTANT: parsed FRESH on every call. The string-array pass rewrites the
+// string literals inside these predicate nodes in place (to resolver calls), so
+// a module-level cached AST would be mutated across obfuscate() calls and leak
+// stale resolver names (undefined _0x... references) into later outputs.
+const OPAQUE_PREDICATES = () => [
   "typeof Date.now === 'function'",
   "typeof Math.max === 'function'",
   "(Array.isArray([])===true && typeof []==='object')",
@@ -24,11 +29,10 @@ const OPAQUE_PREDICATES = [
   "typeof parseInt === 'function' && parseInt('0x10',16)===16",
 ].map((s) => parse(s, { target: "script" }).body[0].expression);
 
-// A self-contained block guarded by a runtime-true opaque predicate. The block
-// performs harmless, real-looking work so it can't be mistaken for dead code.
 function deadStatement() {
   const probe = randName();
-  const pred = OPAQUE_PREDICATES[(Math.random() * OPAQUE_PREDICATES.length) | 0];
+  const preds = OPAQUE_PREDICATES();
+  const pred = preds[(Math.random() * preds.length) | 0];
   return {
     type: "BlockStatement",
     body: [
