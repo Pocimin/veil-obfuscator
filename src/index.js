@@ -61,7 +61,8 @@ export function obfuscate(source, userOptions = {}) {
     ast = applySelfDefending(ast, opts, source);
   }
 
-  return { code: generate(ast), warnings };
+  const genOpts = opts.compact ? { indent: "", lineEnd: "" } : {};
+  return { code: generate(ast, genOpts), warnings };
 }
 
 export default obfuscate;

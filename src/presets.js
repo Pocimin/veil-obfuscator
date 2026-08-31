@@ -16,7 +16,8 @@ export const PRESETS = {
   balanced: {
     stringArray: true,
     stringArrayEncoding: ["rc4"],
-    stringArrayThreshold: 0.8,
+    stringArrayThreshold: 1,
+    stringArrayChain: true,
     rotateStringArray: true,
     shuffleStringArray: true,
     controlFlowFlattening: 0.5,
@@ -27,6 +28,7 @@ export const PRESETS = {
     disableConsole: false,
     domainLock: [],
     renameIdentifiers: true,
+    compact: true,
     vm: false,
   },
 
@@ -35,6 +37,7 @@ export const PRESETS = {
     stringArray: true,
     stringArrayEncoding: ["rc4", "base64"],
     stringArrayThreshold: 1,
+    stringArrayChain: true,
     stringArrayGate: true,
     rotateStringArray: true,
     shuffleStringArray: true,
@@ -47,6 +50,7 @@ export const PRESETS = {
     disableConsole: true,
     domainLock: [],
     renameIdentifiers: true,
+    compact: true,
     vm: true,
   },
 
