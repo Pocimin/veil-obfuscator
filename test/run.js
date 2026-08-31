@@ -106,5 +106,45 @@ try {
   check("gate: falsy probe corrupts strings (anti-dump)", false, e.message);
 }
 
+// 8. Continuous-stateful (chained) decoder: must preserve behavior, and the
+//    output must NOT contain a pre-decoded array of plaintext strings.
+try {
+  const { code } = obfuscate(sample, {
+    preset: "light",
+    stringArrayThreshold: 1,
+    stringArrayChain: true,
+    debugProtection: false,
+    selfDefending: false,
+  });
+  const logs = run(code);
+  const ok =
+    JSON.stringify(logs) === JSON.stringify(["Hello, world", "veil says: Hello, world"]) &&
+    !code.includes('"Hello, "') &&
+    !code.includes(`"veil says:"`);
+  check("chain: runs, preserves behavior, no plaintext array", ok, JSON.stringify(logs));
+} catch (e) {
+  check("chain: runs, preserves behavior, no plaintext array", false, e.message);
+}
+
+// 9. Chained + anti-dump gate: a falsy probe (browser-only, falsy under Node)
+//    must corrupt rather than leak.
+try {
+  const { code } = obfuscate(sample, {
+    preset: "light",
+    stringArrayThreshold: 1,
+    stringArrayChain: true,
+    debugProtection: false,
+    selfDefending: false,
+    stringArrayGate: "typeof document !== 'undefined'",
+  });
+  const leaksPlain = code.includes('"Hello, "') || code.includes(`"veil says:"`);
+  let logs = null;
+  try { logs = run(code); } catch (e) { logs = "[runtime threw: " + e.message + "]"; }
+  const corrupted = !leaksPlain && logs !== null && JSON.stringify(logs) !== JSON.stringify(["Hello, world", "veil says: Hello, world"]);
+  check("chain+gate: falsy probe corrupts strings", corrupted, JSON.stringify(logs));
+} catch (e) {
+  check("chain+gate: falsy probe corrupts strings", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -26,6 +26,7 @@ export const PRESETS = {
     selfDefending: true,
     disableConsole: false,
     domainLock: [],
+    renameIdentifiers: true,
     vm: false,
   },
 
@@ -45,6 +46,7 @@ export const PRESETS = {
     selfDefendingVerbatim: true,
     disableConsole: true,
     domainLock: [],
+    renameIdentifiers: true,
     vm: true,
   },
 

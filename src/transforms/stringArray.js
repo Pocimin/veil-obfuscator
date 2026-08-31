@@ -1,6 +1,7 @@
 import { parse } from "../parse.js";
 import * as walk from "acorn-walk";
 import { encodeString, runtimeDecoderSource } from "./rc4.js";
+import { encodeStringsChained, chainedLoaderSource } from "./chainedString.js";
 import { Identifier, NumberLiteral } from "../ast.js";
 
 const HEX_NAMES = "abcdef0123456789";
@@ -81,18 +82,32 @@ export function applyStringArray(program, opts) {
     ? opts.stringArrayEncoding
     : ["base64"];
 
-  const raw = [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
+  const raw = opts.stringArrayChain
+    ? encodeStringsChained([...pool.keys()], encoderOpts, key)
+    : [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
 
-  const decoderSource = runtimeDecoderSource({
-    arrayName,
-    fnName,
-    encodings: encoderOpts,
-    key,
-    perm,
-    magic,
-    raw,
-    gate: opts.stringArrayGate,
-  });
+  const decoderSource = opts.stringArrayChain
+    ? chainedLoaderSource({
+        arrayName,
+        fnName,
+        encodings: encoderOpts,
+        key,
+        perm,
+        magic,
+        raw,
+        gate: opts.stringArrayGate,
+        gateFail: opts.stringArrayGateFail,
+      })
+    : runtimeDecoderSource({
+        arrayName,
+        fnName,
+        encodings: encoderOpts,
+        key,
+        perm,
+        magic,
+        raw,
+        gate: opts.stringArrayGate,
+      });
 
   const decoderAst = parse(decoderSource, { target: "script" });
 

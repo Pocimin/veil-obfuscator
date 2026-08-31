@@ -77,6 +77,68 @@ export function encodeString(str, encodings, key) {
   return out;
 }
 
+// --- Continuous-stateful ("chain") encoding --------------------------------
+//
+// A single entry can no longer be recovered by applying one round function:
+// every stored element is XOR-masked with a keystream derived from a running
+// `chain`, and the chain is folded with the *ciphertext* after each decode. So
+// to obtain entry k you must walk 0..k in order (nothing is pre-decoded), and
+// dropping or reordering an entry invalidates every later one. This defeats
+// both the "run the loader and read _B" dump and the single-string reverse.
+
+const FNV_OFFSET = 0x811c9dc5;
+
+export function fnv1a(str) {
+  let h = FNV_OFFSET;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// Deterministic xorshift byte stream from a 32-bit seed. Mirrored verbatim in
+// the emitted runtime loader so both sides reproduce the same keystream.
+export function prgBytes(seed, len) {
+  let s = (seed >>> 0) || 1;
+  const out = [];
+  for (let i = 0; i < len; i++) {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    out.push(s & 255);
+  }
+  return out;
+}
+
+export function xorString(str, bytes) {
+  let o = "";
+  for (let i = 0; i < str.length; i++) {
+    o += String.fromCharCode(str.charCodeAt(i) ^ bytes[i]);
+  }
+  return o;
+}
+
+/**
+ * Encode a *list* of strings as a chained array. `strings` are the plaintexts
+ * in logical order; the returned array holds the masked ciphertexts.
+ */
+export function encodeStringChain(strings, encodings, key) {
+  let chain = FNV_OFFSET;
+  const out = [];
+  for (const s of strings) {
+    let C = s;
+    for (const enc of encodings) {
+      if (enc === "base64") C = base64Encode(C);
+      else if (enc === "rc4") C = rc4Encrypt(C, key);
+    }
+    const kb = prgBytes(chain, C.length);
+    out.push(xorString(C, kb));
+    chain = (chain ^ fnv1a(C)) >>> 0;
+  }
+  return out;
+}
+
 /** Decode a stored value, walking the encoding list in reverse. */
 export function decodeString(stored, encodings, key) {
   let out = stored;

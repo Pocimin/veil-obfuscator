@@ -31,6 +31,7 @@ Options:
                           gate is falsy (default: a NUL byte).
     --disable-console       Wipe console methods
     --runtime-gate          Gate string decoding behind a host fingerprint (anti-dump)
+    --rename-identifiers    Mangle local variable/function/param names
     --vm-bytecode-encoding  Encrypt the VM bytecode blob
     --vm-stateful-opcodes   Position-dependent opcode mapping
     --vm-macro-ops          Fuse repeated instruction pairs into macros
@@ -82,6 +83,9 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--runtime-gate":
       options.stringArrayGate = true;
+      break;
+    case "--rename-identifiers":
+      options.renameIdentifiers = true;
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

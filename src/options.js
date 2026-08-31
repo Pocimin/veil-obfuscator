@@ -17,6 +17,12 @@ export const DEFAULT_OPTIONS = {
   stringArrayGate: undefined,
   stringArrayGateFail: undefined,
 
+  // Continuous-stateful decode. When true, the string array is emitted with the
+  // chained loader: entries are lazy/order-coupled, so there is no pre-decoded
+  // array to dump and no single round function to reverse. Off by default (the
+  // classic loader is faster and the Node test harness still self-hosts).
+  stringArrayChain: false,
+
   controlFlowFlattening: 0.5,
   controlFlowFlatteningThreshold: 0.75,
 
@@ -37,6 +43,8 @@ export const DEFAULT_OPTIONS = {
   target: "node",
   comment: false,
   identifierNamesGenerator: "hexadecimal",
+  renameIdentifiers: false,
+  renameProperties: false,
   renameGlobals: false,
   sourceMap: false,
 };

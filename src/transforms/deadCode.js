@@ -67,7 +67,7 @@ function deadStatement() {
     ForStatement(
       VariableDeclaration("var", [VariableDeclarator(Identifier(ctrl), NumberLiteral(0))]),
       BinaryExpression("===", Identifier(ctrl), NumberLiteral(0)),
-      ExpressionStatement(AssignmentExpression("=", Identifier(ctrl), NumberLiteral(1))),
+      AssignmentExpression("=", Identifier(ctrl), NumberLiteral(1)),
       BlockStatement([
         IfStatement(pred, BlockStatement([
           VariableDeclaration("var", [

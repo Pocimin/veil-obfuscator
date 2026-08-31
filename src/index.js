@@ -5,6 +5,7 @@ import { applyDeadCode } from "./transforms/deadCode.js";
 import { applyDebugProtection } from "./transforms/debugProtection.js";
 import { applySelfDefending } from "./transforms/selfDefending.js";
 import { applyDomainLock } from "./transforms/domainLock.js";
+import { applyRenameIdentifiers } from "./transforms/renameIdentifiers.js";
 import { vmize } from "./vm/compile.js";
 import { PRESETS } from "./presets.js";
 import { mergeOptions } from "./options.js";
@@ -26,6 +27,10 @@ export function obfuscate(source, userOptions = {}) {
   }
 
   let ast = parse(source, opts);
+
+  if (opts.renameIdentifiers) {
+    ast = applyRenameIdentifiers(ast, opts);
+  }
 
   if (opts.vm) {
     // VM mode subsumes the other transforms: the program becomes bytecode.
