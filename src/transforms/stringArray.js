@@ -1,7 +1,7 @@
 import { parse } from "../parse.js";
 import * as walk from "acorn-walk";
 import { encodeString, runtimeDecoderSource } from "./rc4.js";
-import { encodeStringsChained, chainedLoaderSource } from "./chainedString.js";
+import { encodeStringsChained, chainedLoaderSource, lzwCompress } from "./chainedString.js";
 import { Identifier, NumberLiteral } from "../ast.js";
 
 const HEX_NAMES = "abcdef0123456789";
@@ -97,6 +97,7 @@ export function applyStringArray(program, opts) {
         raw,
         gate: opts.stringArrayGate,
         gateFail: opts.stringArrayGateFail,
+        lzw: opts.stringArrayLzw ? lzwCompress(JSON.stringify(raw)) : null,
       })
     : runtimeDecoderSource({
         arrayName,

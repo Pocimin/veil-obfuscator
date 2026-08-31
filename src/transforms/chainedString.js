@@ -16,6 +16,9 @@
 //     executing the whole ordered chain, not reading a pre-decoded array.
 
 import { rc4Encrypt, base64Encode } from "./rc4.js";
+import { lzwCompress, lzwDecompressSource } from "./lzw.js";
+
+export { lzwCompress };
 
 const FNV_OFFSET = 0x811c9dc5;
 
@@ -91,6 +94,7 @@ export function chainedLoaderSource(ctx) {
   const keyCodes = [...key].map((c) => c.charCodeAt(0)).join(",");
   const rawJson = JSON.stringify(raw);
   const permJson = JSON.stringify(perm);
+  const lzwDecName = ctx.lzw ? "_0x" + ((Math.random() * 0xffffff) | 0).toString(16) : "";
 
   // Decode steps applied to an individual element once unmasked. Built in
   // reverse of the encode order (base64/rc4 are each invertible).
@@ -134,10 +138,15 @@ export function chainedLoaderSource(ctx) {
     ? `  var ${gateV} = (function(){ return (${gate}); })();`
     : `  var ${gateV} = 1;`;
 
+  const poolDef = ctx.lzw
+    ? `${lzwDecompressSource(lzwDecName)}
+  var ${poolV} = JSON.parse(${lzwDecName}(${JSON.stringify(ctx.lzw)}));`
+    : `  var ${poolV} = ${rawJson};`;
+
   return `
 var ${arrayName} = (function(){
   var ${keyV} = String.fromCharCode(${keyCodes});
-  var ${poolV} = ${rawJson};
+${poolDef}
   var ${permV} = ${permJson};
 ${prims}
   function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }

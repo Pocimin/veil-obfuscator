@@ -7,6 +7,7 @@ export const DEFAULT_OPTIONS = {
   rotateStringArray: true,
   shuffleStringArray: true,
   stringArrayGate: false,
+  stringArrayLzw: false,
 
   // Anti-dump: only decode when a runtime probe passes. Off by default.
   // stringArrayGate: JS expression evaluated at load in the target host. If it
