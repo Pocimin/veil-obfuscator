@@ -77,15 +77,26 @@ export function applyGlobalResolver(program, opts) {
     .map(([name, i]) => `      case 0x${i.toString(16)}: return ${root}[${JSON.stringify(name)}];`)
     .join("\n");
 
+  // Rest-args + .length spoofing on the resolver itself: tooling that keys off
+  // Function.length or arity heuristics gets a deliberately wrong value, and the
+  // params are hidden behind a rest/arguments indirection.
+  const sig = opts.lengthSpoofing ? "(..._a)" : "(_a)";
+  const addr = opts.lengthSpoofing ? "_a[0]" : "_a";
+  const lengthSpoof = opts.lengthSpoofing
+    ? `
+Object.defineProperty(${resolver}, "length", { value: 0x${((Math.random() * 0x1f) | 0 + 1).toString(16)}, writable: false, configurable: true });
+`
+    : "";
+
   const resolverSource = `
-function ${resolver}(_a){
+function ${resolver}${sig}{
   var ${root} = globalThis;
-  switch (_a){
+  switch (${addr}){
 ${cases}
     default: return void 0;
   }
 }
-`;
+${lengthSpoof}`;
 
   const ast = parse(resolverSource, { target: "script" });
   program.body = [...ast.body, ...program.body];

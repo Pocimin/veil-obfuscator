@@ -16,6 +16,7 @@ const SAFE_TYPES = new Set([
   "WhileStatement",
   "DoWhileStatement",
   "TryStatement",
+  "VariableDeclaration", // only kind === "var" is accepted (checked below)
 ]);
 
 let uid = 0;
@@ -117,6 +118,18 @@ function flattenIfNeeded(fn, opts) {
   const dispatch = randName();
   const label = randName();
   const useOpaque = !!opts.opaquePredicates;
+  const useHeavy = !!opts.aggressiveCF;
+  const r = { a: randName(), b: randName(), c: randName() };
+
+  const gateCase = (n) =>
+    useOpaque
+      ? {
+          type: "ConditionalExpression",
+          test: opaquePredicateNode(),
+          consequent: number(n),
+          alternate: number(-OPAQUE_SEED),
+        }
+      : number(n);
 
   const nextState = (n) =>
     useOpaque
@@ -133,9 +146,45 @@ function flattenIfNeeded(fn, opts) {
         }
       : number(n);
 
+  if (!useHeavy) {
+    const cases = body.map((stmt, i) => ({
+      type: "SwitchCase",
+      test: number(i),
+      consequent: [
+        stmt,
+        {
+          type: "ExpressionStatement",
+          expression: {
+            type: "AssignmentExpression",
+            operator: "=",
+            left: Identifier(dispatch),
+            right: nextState(i + 1),
+          },
+        },
+        BreakStatement(),
+      ],
+    }));
+    cases.push({ type: "SwitchCase", test: number(body.length), consequent: [BreakStatement(label)] });
+    cases.push({ type: "SwitchCase", test: null, consequent: [BreakStatement(label)] });
+
+    const switchNode = { type: "SwitchStatement", discriminant: Identifier(dispatch), cases };
+    const forNode = {
+      type: "ForStatement",
+      init: VariableDeclaration("var", [VariableDeclarator(Identifier(dispatch), number(0))]),
+      test: null, update: null, body: switchNode,
+    };
+    fn.body = { type: "BlockStatement", body: [{
+      type: "LabeledStatement", label: Identifier(label), body: forNode,
+    }] };
+    return;
+  }
+
+  // Heavy 3-register state machine: while(a+b+c!==K){ switch(a+b+c){...} } with
+  // opaque-gated case labels. Linear-only so semantics are preserved.
+  const K = body.length;
   const cases = body.map((stmt, i) => ({
     type: "SwitchCase",
-    test: number(i),
+    test: gateCase(i),
     consequent: [
       stmt,
       {
@@ -143,7 +192,7 @@ function flattenIfNeeded(fn, opts) {
         expression: {
           type: "AssignmentExpression",
           operator: "=",
-          left: Identifier(dispatch),
+          left: Identifier(r.a),
           right: nextState(i + 1),
         },
       },
@@ -151,35 +200,24 @@ function flattenIfNeeded(fn, opts) {
     ],
   }));
 
-  // Exit case: when the dispatch reaches the final index we break the loop.
-  cases.push({
-    type: "SwitchCase",
-    test: number(body.length),
-    consequent: [BreakStatement(label)],
+  const sum = () => ({
+    type: "BinaryExpression",
+    operator: "+",
+    left: { type: "BinaryExpression", operator: "+", left: Identifier(r.a), right: Identifier(r.b) },
+    right: Identifier(r.c),
   });
-  cases.push({ type: "SwitchCase", test: null, consequent: [BreakStatement(label)] });
 
-  const switchNode = {
-    type: "SwitchStatement",
-    discriminant: Identifier(dispatch),
-    cases,
-  };
-
-  const forNode = {
-    type: "ForStatement",
-    init: VariableDeclaration("var", [
-      VariableDeclarator(Identifier(dispatch), number(0)),
-    ]),
-    test: null,
-    update: null,
+  const switchNode = { type: "SwitchStatement", discriminant: sum(), cases };
+  const init = VariableDeclaration("var", [
+    VariableDeclarator(Identifier(r.a), number(0)),
+    VariableDeclarator(Identifier(r.b), number(0)),
+    VariableDeclarator(Identifier(r.c), number(0)),
+  ]);
+  const whileNode = {
+    type: "WhileStatement",
+    test: { type: "BinaryExpression", operator: "!==", left: sum(), right: number(K) },
     body: switchNode,
   };
 
-  const labeled = {
-    type: "LabeledStatement",
-    label: Identifier(label),
-    body: forNode,
-  };
-
-  fn.body = { type: "BlockStatement", body: [labeled] };
+  fn.body = { type: "BlockStatement", body: [init, whileNode] };
 }
