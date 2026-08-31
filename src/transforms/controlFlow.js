@@ -37,11 +37,63 @@ function number(n) {
   return NumberLiteral(n);
 }
 
+const OPAQUE_SEED = 0xdead;
+
+// A runtime-true opaque predicate shared by every flattened dispatcher in a
+// program. It must stay truthy; folding it to false sends every case to the
+// default break (wrong result), so a deobfuscator must *understand* it rather
+// than delete it.
+let opqName = null;
+function opaquePredicateNode() {
+  return {
+    type: "CallExpression",
+    callee: Identifier(opqName),
+    arguments: [],
+    optional: false,
+  };
+}
+
+function injectOpaquePredicate(program) {
+  if (!opqName) opqName = randName();
+  // typeof is a unary operator: build typeof Date === 'function'.
+  const typeofCheck = {
+    type: "BinaryExpression",
+    operator: "===",
+    left: {
+      type: "UnaryExpression",
+      operator: "typeof",
+      prefix: true,
+      argument: Identifier("Date"),
+    },
+    right: { type: "Literal", value: "function", raw: "'function'" },
+  };
+  const decl = {
+    type: "FunctionDeclaration",
+    id: Identifier(opqName),
+    params: [],
+    body: {
+      type: "BlockStatement",
+      body: [
+        { type: "ReturnStatement", argument: {
+          type: "ConditionalExpression",
+          test: typeofCheck,
+          consequent: { type: "Literal", value: 1, raw: "0x1" },
+          alternate: { type: "Literal", value: 1, raw: "0x1" },
+        } },
+      ],
+    },
+    generator: false,
+    async: false,
+  };
+  program.body.unshift(decl);
+}
+
 /**
  * Flatten linear function bodies into a jump-table dispatcher.
  * Only rewrites functions with a flat body to guarantee identical behavior.
  */
 export function applyControlFlow(program, opts) {
+  if (opts.opaquePredicates) injectOpaquePredicate(program);
   walk.ancestor(program, {
     FunctionDeclaration(node) {
       flattenIfNeeded(node, opts);
@@ -64,6 +116,22 @@ function flattenIfNeeded(fn, opts) {
   const body = fn.body.body;
   const dispatch = randName();
   const label = randName();
+  const useOpaque = !!opts.opaquePredicates;
+
+  const nextState = (n) =>
+    useOpaque
+      ? {
+          type: "BinaryExpression",
+          operator: "^",
+          left: number(n),
+          right: {
+            type: "ConditionalExpression",
+            test: opaquePredicateNode(),
+            consequent: { type: "Literal", value: 0, raw: "0x0" },
+            alternate: { type: "Literal", value: OPAQUE_SEED, raw: "0xdead" },
+          },
+        }
+      : number(n);
 
   const cases = body.map((stmt, i) => ({
     type: "SwitchCase",
@@ -76,7 +144,7 @@ function flattenIfNeeded(fn, opts) {
           type: "AssignmentExpression",
           operator: "=",
           left: Identifier(dispatch),
-          right: number(i + 1),
+          right: nextState(i + 1),
         },
       },
       BreakStatement(),

@@ -53,6 +53,8 @@ export const PRESETS = {
     domainLock: [],
     renameIdentifiers: true,
     globalResolver: true,
+    opaquePredicates: true,
+    cosmetic: true,
     compact: true,
     vm: true,
   },

@@ -156,5 +156,20 @@ try {
   check("globalResolver: globals not greppable", false, e.message);
 }
 
+// 11. Opaque Predicates woven into CF + cosmetic booleans.
+try {
+  const { code } = obfuscate("function f(x){ if(x===undefined){return true;} return false; } console.log(f(2));", {
+    preset: "light", stringArray: true, stringArrayThreshold: 1, opaquePredicates: true, cosmetic: true,
+    controlFlowFlattening: 1, renameIdentifiers: false, globalResolver: false,
+    debugProtection: false, selfDefending: false, deadCodeInjection: 0,
+  });
+  const opaque = /typeof Date/.test(code);
+  const cos = /!0x1|!0x0|void 0/.test(code);
+  check("opaque predicates emitted", opaque);
+  check("cosmetic booleans emitted", cos);
+} catch (e) {
+  check("opaque/cosmetic tests", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

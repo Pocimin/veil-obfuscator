@@ -33,6 +33,8 @@ Options:
     --runtime-gate          Gate string decoding behind a host fingerprint (anti-dump)
     --rename-identifiers    Mangle local variable/function/param names
     --compact               Minify output to a single line (unpretty)
+    --opaque-predicates     Weave always-true predicates into the dispatcher
+    --cosmetic              Cosmetic hardening (!0x1 / void 0)
     --vm-bytecode-encoding  Encrypt the VM bytecode blob
     --vm-stateful-opcodes   Position-dependent opcode mapping
     --vm-macro-ops          Fuse repeated instruction pairs into macros
@@ -90,6 +92,12 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--compact":
       options.compact = true;
+      break;
+    case "--opaque-predicates":
+      options.opaquePredicates = true;
+      break;
+    case "--cosmetic":
+      options.cosmetic = true;
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

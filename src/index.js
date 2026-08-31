@@ -7,6 +7,7 @@ import { applySelfDefending } from "./transforms/selfDefending.js";
 import { applyDomainLock } from "./transforms/domainLock.js";
 import { applyRenameIdentifiers } from "./transforms/renameIdentifiers.js";
 import { applyGlobalResolver } from "./transforms/globalResolver.js";
+import { applyCosmetic } from "./transforms/cosmetic.js";
 import { vmize } from "./vm/compile.js";
 import { PRESETS } from "./presets.js";
 import { mergeOptions } from "./options.js";
@@ -48,6 +49,10 @@ export function obfuscate(source, userOptions = {}) {
 
   if (opts.controlFlowFlattening > 0) {
     ast = applyControlFlow(ast, opts);
+  }
+
+  if (opts.cosmetic) {
+    ast = applyCosmetic(ast, opts);
   }
 
   if (opts.stringArray) {

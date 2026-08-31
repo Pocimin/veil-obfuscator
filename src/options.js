@@ -9,6 +9,8 @@ export const DEFAULT_OPTIONS = {
   stringArrayGate: false,
   stringArrayLzw: false,
   globalResolver: false,
+  opaquePredicates: false,
+  cosmetic: false,
 
   // Anti-dump: only decode when a runtime probe passes. Off by default.
   // stringArrayGate: JS expression evaluated at load in the target host. If it
