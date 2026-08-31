@@ -1,8 +1,15 @@
 import { parse } from "../parse.js";
 import * as walk from "acorn-walk";
 import { encodeString, runtimeDecoderSource } from "./rc4.js";
-import { encodeStringsChained, chainedLoaderSource, lzwCompress } from "./chainedString.js";
-import { Identifier, NumberLiteral } from "../ast.js";
+import {
+  encodeStringsChained,
+  chainedLoaderSource,
+  lzwCompress,
+  rotationFor,
+  deriveKey,
+  obfuscateIndex,
+} from "./chainedString.js";
+import { Identifier } from "../ast.js";
 
 const HEX_NAMES = "abcdef0123456789";
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -64,48 +71,42 @@ export function applyStringArray(program, opts) {
 
   if (pool.size === 0) return program;
 
-  const key = randKey();
+  const n = pool.size;
   const fnName = randName();
   const arrayName = randName();
-  const magic = 3 + ((Math.random() * 0xff) | 0); // 3..257-ish, never 0
-
-  // Baked permutation: box[perm[i]] = decoded(string i). Shuffle on every run
-  // so the storage order never matches the logical order.
-  const n = pool.size;
-  const perm = [...Array(n).keys()];
-  for (let i = n - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    [perm[i], perm[j]] = [perm[j], perm[i]];
-  }
-
   const encoderOpts = opts.stringArrayEncoding.length
     ? opts.stringArrayEncoding
     : ["base64"];
 
-  const raw = opts.stringArrayChain
+  const useChain = !!opts.stringArrayChain;
+
+  // Runtime-rotation + pool-derived key. Both loader and (for chain mode) the
+  // encoder share the same deterministic derivation, so no key literal ships.
+  const R = rotationFor(n);
+  const key = deriveKey(n, R);
+
+  const raw = useChain
     ? encodeStringsChained([...pool.keys()], encoderOpts, key)
     : [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
 
-  const decoderSource = opts.stringArrayChain
+  const decoderSource = useChain
     ? chainedLoaderSource({
         arrayName,
         fnName,
         encodings: encoderOpts,
-        key,
-        perm,
-        magic,
         raw,
         gate: opts.stringArrayGate,
         gateFail: opts.stringArrayGateFail,
         lzw: opts.stringArrayLzw ? lzwCompress(JSON.stringify(raw)) : null,
+        wrappers: opts.stringArrayWrappersCount ?? 3,
       })
     : runtimeDecoderSource({
         arrayName,
         fnName,
         encodings: encoderOpts,
         key,
-        perm,
-        magic,
+        perm: [...Array(n).keys()],
+        magic: 0,
         raw,
         gate: opts.stringArrayGate,
       });
@@ -116,14 +117,12 @@ export function applyStringArray(program, opts) {
   program.body = [...decoderAst.body, ...program.body];
   uid++;
 
-  // Replace string literals with opaque resolver calls:
-  //   fnName(perm[index] ^ magic)
-  // The index is not resolvable statically without running the loader.
+  // Replace string literals with resolver calls passing an OBFUSCATED index
+  // expression (evaluates to the logical index; not a bare literal).
   for (const { node, index } of replacements) {
-    const opaque = perm[index] ^ magic;
     node.type = "CallExpression";
     node.callee = Identifier(fnName);
-    node.arguments = [NumberLiteral(opaque)];
+    node.arguments = [parse(obfuscateIndex(index), { target: "script" }).body[0].expression];
     delete node.value;
     delete node.raw;
     delete node.parent;

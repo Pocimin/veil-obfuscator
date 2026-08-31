@@ -1,70 +1,49 @@
-// Continuous-stateful ("chained") string-array encoding.
-//
-// This file is intentionally self-contained and does NOT modify rc4.js (the
-// runtime loader there is managed separately). It reuses only the existing,
-// stable build-time primitives (rc4Encrypt / base64Encode) and re-implements
-// its own incremental keystream so the emitted loader is independent.
-//
-// Why chained:
-//   - Nothing is decoded up front. The box starts empty and each entry is
-//     resolved lazily on first access.
-//   - Every decode consumes a running keystream (`chain`) and folds the
-//     *ciphertext* back into it. Entry k therefore cannot be recovered without
-//     walking 0..k in order, and dropping/reordering an entry corrupts every
-//     later one.
-//   - There is no single "round function" to reverse: recovery requires
-//     executing the whole ordered chain, not reading a pre-decoded array.
-
 import { rc4Encrypt, base64Encode } from "./rc4.js";
 import { lzwCompress, lzwDecompressSource } from "./lzw.js";
 
 export { lzwCompress };
 
-const FNV_OFFSET = 0x811c9dc5;
+/* ------------------------------------------------------------------ */
+/* Build-time derived key (mirror of the runtime derivation).          */
+/* The RC4 key is computed from the pool length and the rotation       */
+/* amount — there is NO literal key shipped next to the cipher.        */
+/* ------------------------------------------------------------------ */
+const K_A = 31337, K_B = 9176, K_C = 4099, K_D = 0x5bd1e995;
 
-function fnv1a(str) {
-  let h = FNV_OFFSET;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
+export function rotationFor(n) {
+  return (n * 0x9e37 + 0x123) % Math.max(1, n);
 }
 
+export function deriveKey(n, r) {
+  const chars = [];
+  for (let i = 0; i < 16; i++) chars.push((n * K_A + r * K_B + i * K_C + K_D) & 0xff);
+  return String.fromCharCode(...chars);
+}
+
+const FNV_OFFSET = 0x811c9dc5;
+function fnv1a(str) {
+  let h = FNV_OFFSET;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h >>> 0;
+}
 function prgBytes(seed, len) {
   let s = (seed >>> 0) || 1;
   const out = [];
-  for (let i = 0; i < len; i++) {
-    s ^= s << 13; s >>>= 0;
-    s ^= s >>> 17;
-    s ^= s << 5; s >>>= 0;
-    out.push(s & 255);
-  }
+  for (let i = 0; i < len; i++) { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; out.push(s & 255); }
   return out;
 }
-
 function xorString(str, bytes) {
   let o = "";
-  for (let i = 0; i < str.length; i++) {
-    o += String.fromCharCode(str.charCodeAt(i) ^ bytes[i]);
-  }
+  for (let i = 0; i < str.length; i++) o += String.fromCharCode(str.charCodeAt(i) ^ bytes[i]);
   return o;
 }
 
-/**
- * Encode a list of plaintexts (logical order) into a chained, masked array.
- * Returns the stored strings in logical order; index recovery is deferred to
- * the runtime loader which owns the permutation + inverse mapping.
- */
 export function encodeStringsChained(strings, encodings, key) {
   let chain = FNV_OFFSET;
   const out = [];
   for (const s of strings) {
     let C = s;
-    for (const enc of encodings) {
-      if (enc === "base64") C = base64Encode(C);
-      else if (enc === "rc4") C = rc4Encrypt(C, key);
-    }
+    for (const enc of encodings) { if (enc === "base64") C = base64Encode(C); else if (enc === "rc4") C = rc4Encrypt(C, key); }
     const kb = prgBytes(chain, C.length);
     out.push(xorString(C, kb));
     chain = (chain ^ fnv1a(C)) >>> 0;
@@ -72,43 +51,29 @@ export function encodeStringsChained(strings, encodings, key) {
   return out;
 }
 
+function nm(p) { return "_0x" + ((Math.random() * 0xffffff) | 0).toString(16) + String(p).slice(-2); }
+
 /**
- * Emit the runtime loader for a chained array. `ctx` fields mirror those of
- * rc4.js's runtimeDecoderSource: arrayName, fnName, encodings, key, perm,
- * magic, raw, gate, gateFail. `raw` must be the output of encodeStringsChained
- * (masked ciphertext, logical order); `perm` is the baked storage permutation.
+ * Emit the runtime loader for a chained array with:
+ *   - runtime rotation (no static perm), pool-derived key, wrapper indirection.
+ * `ctx`: arrayName, fnName, encodings, raw, gate, gateFail, lzw, wrappers.
  */
 export function chainedLoaderSource(ctx) {
-  const {
-    arrayName,
-    fnName,
-    encodings,
-    key,
-    perm,
-    magic,
-    raw,
-    gate,
-    gateFail,
-  } = ctx;
+  const { arrayName, fnName, encodings, raw, gate, gateFail, lzw, wrappers } = ctx;
+  const N = raw.length;
+  const R = rotationFor(N);
 
-  const keyCodes = [...key].map((c) => c.charCodeAt(0)).join(",");
-  const rawJson = JSON.stringify(raw);
-  const permJson = JSON.stringify(perm);
-  const lzwDecName = ctx.lzw ? "_0x" + ((Math.random() * 0xffffff) | 0).toString(16) : "";
+  const keyV = nm(1), poolV = nm(2), chainV = nm(3), boxV = nm(4), gateV = nm(5);
+  const rotV = nm(6), fx = nm(7), fxo = nm(8);
+  const rc = nm(9), b64 = nm(10), fnv = nm(11), prg = nm(12), lzwName = lzw ? nm(13) : "";
 
-  // Decode steps applied to an individual element once unmasked. Built in
-  // reverse of the encode order (base64/rc4 are each invertible).
-  const rc = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const b64 = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const fnv = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const prg = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const keyV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const poolV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const permV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const invV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const chainV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const boxV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-  const gateV = "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
+  const keySource = (() => {
+    const parts = [];
+    for (let i = 0; i < 16; i++) parts.push(`(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`);
+    return `
+  var ${rotV} = (${poolV}.length * 0x9e37 + 0x123) % ${Math.max(1, N)};
+  var ${keyV} = String.fromCharCode(${parts.join(",")});`;
+  })();
 
   const steps = [];
   for (const enc of [...encodings].reverse()) {
@@ -134,33 +99,21 @@ export function chainedLoaderSource(ctx) {
     return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
   }`;
 
-  const gateDef = gate
-    ? `  var ${gateV} = (function(){ return (${gate}); })();`
-    : `  var ${gateV} = 1;`;
+  const poolDef = lzw
+    ? `${lzwDecompressSource(lzwName)}
+  var ${poolV} = JSON.parse(${lzwName}(${JSON.stringify(lzw)}));`
+    : `  var ${poolV} = ${JSON.stringify(raw)};`;
 
-  const poolDef = ctx.lzw
-    ? `${lzwDecompressSource(lzwDecName)}
-  var ${poolV} = JSON.parse(${lzwDecName}(${JSON.stringify(ctx.lzw)}));`
-    : `  var ${poolV} = ${rawJson};`;
+  const gateDef = gate ? `  var ${gateV} = (function(){ return (${gate}); })();` : `  var ${gateV} = 1;`;
 
-  return `
-var ${arrayName} = (function(){
-  var ${keyV} = String.fromCharCode(${keyCodes});
-${poolDef}
-  var ${permV} = ${permJson};
-${prims}
-  function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
-  function ${prg}(seed,len){ var s=seed>>>0||1; var o=[]; for(var i=0;i<len;i++){ s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;o.push(s&255); } return o; }
-  var ${chainV} = 0x811c9dc5;
-  var ${boxV} = [];
-  var ${invV} = new Array(${permV}.length);
-  for (var u=0;u<${permV}.length;u++) ${invV}[${permV}[u]] = u;
-${gateDef}
-  function dx(i){
+  // dx(i): logical index i, fetched through the rotated pool. Chain coupling is
+  // by logical order, so pool[(k - R + N) % N] yields logical entry k.
+  const dx = `
+  function ${fx}(i){
     if (${boxV}[i] !== undefined) return ${boxV}[i];
     for (var k=0;k<=i;k++){
       if (${boxV}[k] !== undefined) continue;
-      var w = ${poolV}[k];
+      var w = ${poolV}[(k - ${rotV} + ${N}) % ${N}];
       var kb = ${prg}(${chainV}, w.length);
       var t=''; for(var m=0;m<w.length;m++) t+=String.fromCharCode(w.charCodeAt(m)^kb[m]);
       w=t;
@@ -170,13 +123,50 @@ ${decodeSteps}
       ${chainV} = ${chainV} ^ ${fnv}(c);
     }
     return ${boxV}[i];
+  }`;
+
+  const gatePrelude = gate
+    ? `  if (!${gateV}) { for (var q=0;q<${N};q++) ${boxV}[q] = ${JSON.stringify(gateFail ?? "\u0000")}; }`
+    : "";
+
+  // The IIFE returns the real accessor; the wrappers + public accessor live
+  // OUTSIDE the closure and call `arrayName(i)` (indirection so the getter
+  // isn't one clean call into the loader).
+  const wrapN = Math.max(1, wrappers || 3);
+  const wrappersSrc = [];
+  let inner = `${arrayName}(_i)`;
+  for (let i = 0; i < wrapN - 1; i++) {
+    const wn = nm(20 + i);
+    wrappersSrc.push(`function ${wn}(_i){ return ${inner}; }`);
+    inner = `${wn}(_i)`;
   }
-  if (!${gateV}) { for (var q=0;q<${permV}.length;q++) ${boxV}[q] = ${JSON.stringify(gateFail ?? "\u0000")}; }
-  return function(_i){
-    if (!${gateV}) return ${boxV}[0];
-    return dx(${invV}[_i ^ ${magic}]);
-  };
+  const accessor = `function ${fnName}(_i){ return ${inner}; }`;
+
+  return `
+var ${arrayName} = (function(){
+${poolDef}
+${keySource}
+${prims}
+  function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
+  function ${prg}(seed,len){ var s=seed>>>0||1; var o=[]; for(var i=0;i<len;i++){ s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;o.push(s&255); } return o; }
+  var ${chainV} = 0x811c9dc5;
+  var ${boxV} = [];
+${gateDef}
+${dx}
+${gatePrelude}
+  return function(_i){ ${gate ? `if (!${gateV}) return ${boxV}[0];` : ""} return ${fx}(_i); };
 })();
-function ${fnName}(_i){ return ${arrayName}(_i); }
+${wrappersSrc.join("\n")}
+${accessor}
 `;
+}
+
+/**
+ * Build an obfuscated index expression that evaluates to `i` but doesn't look
+ * like a bare integer (jsfuscator-style `fn(0x1a & 0x1e)`).
+ */
+export function obfuscateIndex(i) {
+  // Evaluates to `i`: (X ^ 0x5a) where X = i ^ 0x5a.
+  const x = ((i ^ 0x5a) & 0xff).toString(16).padStart(2, "0");
+  return `(0x${x} ^ 0x5a)`;
 }

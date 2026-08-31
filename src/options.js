@@ -8,6 +8,7 @@ export const DEFAULT_OPTIONS = {
   shuffleStringArray: true,
   stringArrayGate: false,
   stringArrayLzw: false,
+  stringArrayWrappersCount: 3,
   globalResolver: false,
   lengthSpoofing: false,
   opaquePredicates: false,
