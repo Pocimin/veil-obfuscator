@@ -1,7 +1,7 @@
-import { generate, parse } from "../parse.js";
+import { parse } from "../parse.js";
 import * as walk from "acorn-walk";
 import { encodeString, runtimeDecoderSource } from "./rc4.js";
-import { CallExpression, Identifier, NumberLiteral } from "../ast.js";
+import { Identifier, NumberLiteral } from "../ast.js";
 
 const HEX_NAMES = "abcdef0123456789";
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -66,22 +66,32 @@ export function applyStringArray(program, opts) {
   const key = randKey();
   const fnName = randName();
   const arrayName = randName();
+  const magic = 3 + ((Math.random() * 0xff) | 0); // 3..257-ish, never 0
+
+  // Baked permutation: box[perm[i]] = decoded(string i). Shuffle on every run
+  // so the storage order never matches the logical order.
+  const n = pool.size;
+  const perm = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
 
   const encoderOpts = opts.stringArrayEncoding.length
     ? opts.stringArrayEncoding
     : ["base64"];
 
-  const encoded = [...pool.keys()].map((s) =>
-    encodeString(s, encoderOpts, key),
-  );
+  const raw = [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
 
-  const arrayLit = "[" + encoded.map((e) => JSON.stringify(e)).join(",") + "]";
-  const decoderSource = runtimeDecoderSource(
+  const decoderSource = runtimeDecoderSource({
     arrayName,
     fnName,
-    encoderOpts,
+    encodings: encoderOpts,
     key,
-  ).replace("__REPLACE_ARRAY__", arrayLit);
+    perm,
+    magic,
+    raw,
+  });
 
   const decoderAst = parse(decoderSource, { target: "script" });
 
@@ -89,20 +99,17 @@ export function applyStringArray(program, opts) {
   program.body = [...decoderAst.body, ...program.body];
   uid++;
 
-  // Replace string literals with decoder calls.
+  // Replace string literals with opaque resolver calls:
+  //   fnName(perm[index] ^ magic)
+  // The index is not resolvable statically without running the loader.
   for (const { node, index } of replacements) {
+    const opaque = perm[index] ^ magic;
     node.type = "CallExpression";
     node.callee = Identifier(fnName);
-    node.arguments = [NumberLiteral(index)];
+    node.arguments = [NumberLiteral(opaque)];
     delete node.value;
     delete node.raw;
     delete node.parent;
-  }
-
-  // Optional: rotate the array so the literal order is permuted.
-  if (opts.rotateStringArray) {
-    // Rotating the runtime array requires re-indexing replacements; skip for
-    // simplicity and log a note. (Kept deterministic & correct.)
   }
 
   return program;

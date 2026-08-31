@@ -107,38 +107,64 @@ function base64Decode(str) {
 }
 
 /**
- * Emit the runtime decoder as a source string (later parsed into the program).
- * `arrayName` holds encoded strings; `fnName(index)` returns the decoded value.
+ * Emit the hardened runtime loader as a source string (later parsed & injected).
+ *
+ * `ctx` fields:
+ *   arrayName   — the getter's backing box variable
+ *   fnName      — the accessor function `fnName(opaqueIndex) -> string`
+ *   encodings   — ["rc4","base64"] applied in order at encode time
+ *   key         — the rc4 key (transformed into char-codes at runtime)
+ *   perm        — baked permutation: box[perm[i]] holds decoded string i
+ *   magic       — xor mask applied to the opaque index in `fnName`
+ *   raw         — ciphertext array (logical order)
+ *
+ * Every string in `raw` is only recoverable by executing the (function(){})(),
+ * and the key travels as char-codes, not a literal sitting next to the cipher.
+ * Index recovery requires both `perm` and `magic` and is deferred to runtime.
  */
-export function runtimeDecoderSource(arrayName, fnName, encodings, key) {
+export function runtimeDecoderSource(ctx) {
+  const { arrayName, fnName, encodings, key, perm, magic, raw } = ctx;
+
   const steps = [];
   for (const enc of [...encodings].reverse()) {
-    if (enc === "base64") steps.push("v=_b64dec(v);");
-    else if (enc === "rc4") steps.push("v=_rc4(v,KEY);");
+    if (enc === "base64") steps.push("v=_bx64(v);");
+    else if (enc === "rc4") steps.push("v=_bxrc(v,_KEY);");
   }
+  const chain = steps.length ? steps.join("\n          ") : "";
+
+  const keyCodes = [...key].map((c) => c.charCodeAt(0)).join(",");
+  const permJson = JSON.stringify(perm);
+  const rawJson = JSON.stringify(raw);
+
   return `
-var ${arrayName} = __REPLACE_ARRAY__;
-function ${fnName}(i){
-  var v = ${arrayName}[i];
-  ${steps.join("\n  ")}
-  return v;
-}
-function _rc4(d, k){
-  var s=[], j=0, a=0, b=0, out='';
-  for(var i=0;i<256;i++) s[i]=i;
-  for(i=0;i<256;i++){ j=(j+s[i]+k.charCodeAt(i%k.length))%256; var t=s[i]; s[i]=s[j]; s[j]=t; }
-  for(i=0;i<d.length;i++){ a=(a+1)%256; b=(b+s[a])%256; var t2=s[a]; s[a]=s[b]; s[b]=t2;
-    out+=String.fromCharCode(d.charCodeAt(i)^s[(s[a]+s[b])%256]); }
-  return out;
-}
-function _b64dec(str){
-  var C='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', b=0, bs=0, out=[];
-  var clean=str.replace(/=+$/,'');
-  for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
-    b=(b<<6)|v; bs+=6; if(bs>=8){ bs-=8; out.push((b>>bs)&255); } }
-  return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
-}
-var KEY=${JSON.stringify(key)};
+var ${arrayName} = (function(){
+  var _KEY = String.fromCharCode(${keyCodes});
+  var _POOL = ${rawJson};
+  var _PERM = ${permJson};
+  function _bxrc(d, k){
+    var s=[], j=0, a=0, b=0, o='';
+    for(var i=0;i<256;i++) s[i]=i;
+    for(i=0;i<256;i++){ j=(j+s[i]+k.charCodeAt(i%k.length))%256; var t=s[i]; s[i]=s[j]; s[j]=t; }
+    for(i=0;i<d.length;i++){ a=(a+1)%256; b=(b+s[a])%256; var t2=s[a]; s[a]=s[b]; s[b]=t2;
+      o+=String.fromCharCode(d.charCodeAt(i)^s[(s[a]+s[b])%256]); }
+    return o;
+  }
+  function _bx64(str){
+    var C='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', b=0, bs=0, out=[];
+    var clean=str.replace(/=+$/,'');
+    for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
+      b=(b<<6)|v; bs+=6; if(bs>=8){ bs-=8; out.push((b>>bs)&255); } }
+    return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
+  }
+  var _B = [];
+  for (var _i=0;_i<_POOL.length;_i++){
+    var v = _POOL[_i];
+          ${chain}
+    _B[_PERM[_i]] = v;
+  }
+  return _B;
+})();
+function ${fnName}(_i){ return ${arrayName}[ _i ^ ${magic} ]; }
 `;
 }
 

@@ -1,5 +1,9 @@
 import { parse } from "../parse.js";
 
+function randName() {
+  return "_0x" + (((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0"));
+}
+
 /**
  * Injects an anti-debug freezer: a `debugger` trap that measures how long it
  * takes to step past the statement. If a debugger is attached the delta is
@@ -11,24 +15,27 @@ export function applyDebugProtection(program, opts, originalSource) {
       ? opts.debugProtectionInterval
       : 2000;
 
+  const anti = randName();
+  const boot = randName();
+  const wig = randName();
+  const mark = randName();
+
   const src = `
 (function(){
-  var _0xmark = ${interval} ? Date.now() : 0;
-  function _0xanti(){
-    var _0xt0 = performance.now();
+  var _${mark} = ${interval} ? Date.now() : 0;
+  function ${anti}(){
+    var _t0 = performance.now();
     debugger;
-    if (_0xt0 !== _0xt0) { return; }
-    if (performance.now() - _0xt0 > 100) {
-      // A debugger paused us: freeze the tab.
-      (function _0xwig(){ while (true) {} _0xwig(); })();
+    if (_t0 !== _t0) { return; }
+    if (performance.now() - _t0 > 100) {
+      (function ${wig}(){ while (true) {} ${wig}(); })();
     }
-    _0xmark = _0xt0;
+    _${mark} = _t0;
   }
-  (function _0xboot(){
-    // Re-trigger on microtasks so it is not trivially removed.
-    typeof queueMicrotask === 'function' ? queueMicrotask(_0xanti) : _0xanti();
+  (function ${boot}(){
+    typeof queueMicrotask === 'function' ? queueMicrotask(${anti}) : ${anti}();
   })();
-  setInterval(_0xanti, ${interval});
+  setInterval(${anti}, ${interval});
 })();
 `;
 

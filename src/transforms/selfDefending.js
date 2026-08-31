@@ -1,7 +1,9 @@
 import { parse, generate } from "../parse.js";
 import * as walk from "acorn-walk";
 
-const MARKER_FN = "_0xa";
+function randName() {
+  return "_0x" + (((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0"));
+}
 
 /**
  * Self-defending. A guard function fingerprints its own source. At runtime we
@@ -11,12 +13,17 @@ const MARKER_FN = "_0xa";
  * on normal runs of the untouched output).
  */
 export function applySelfDefending(program, opts) {
+  const markerFn = randName();
+  const param = randName();
+  const bodyVar = randName();
+  const spin = randName();
+
   const src = `
 (function(){
-  function ${MARKER_FN}(_0xb) { return _0xb; }
-  var _0xbody = ${MARKER_FN}.toString().replace(/\\s+/g, " ");
-  if (_0xbody.indexOf(${expectedSnippet()}) === -1) {
-    (function _0xspin(){ while (true) {} _0xspin(); })();
+  function ${markerFn}(${param}) { return ${param}; }
+  var ${bodyVar} = ${markerFn}.toString().replace(/\\s+/g, " ");
+  if (${bodyVar}.indexOf(${JSON.stringify(normalize(`function ${markerFn}(${param}) { return ${param}; }`))}) === -1) {
+    (function ${spin}(){ while (true) {} ${spin}(); })();
   }
 })();
 `;
@@ -27,19 +34,6 @@ export function applySelfDefending(program, opts) {
 }
 
 // The exact normalized source of the guard as astring will emit it.
-function expectedSnippet() {
-  const src = `\n  function ${MARKER_FN}(_0xb) { return _0xb; }\n`;
-  const ast = parse(src, { target: "script" });
-  let guard = null;
-  walk.simple(ast, {
-    FunctionDeclaration(node) {
-      if (node.id && node.id.name === MARKER_FN) guard = node;
-    },
-  });
-  const rendered = normalize(generate(guard));
-  return JSON.stringify(rendered);
-}
-
 function normalize(s) {
   return s.replace(/\s+/g, " ").trim();
 }

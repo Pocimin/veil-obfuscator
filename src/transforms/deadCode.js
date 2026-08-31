@@ -1,5 +1,6 @@
 import * as walk from "acorn-walk";
-import { StringLiteral, Identifier, VariableDeclaration, VariableDeclarator, IfStatement, BinaryExpression, ExpressionStatement, CallExpression } from "../ast.js";
+import { parse } from "../parse.js";
+import { StringLiteral, Identifier, VariableDeclaration, VariableDeclarator, IfStatement, BinaryExpression, ExpressionStatement } from "../ast.js";
 
 let uid = 0;
 
@@ -11,25 +12,41 @@ function lit(n) {
   return { type: "Literal", value: n, raw: String(n) };
 }
 
-// A self-contained block that never executes: declares a guard var, then an
-// impossible `if` whose body would throw (but never runs). Safe by construction.
+// Opaque predicates that a naive `if (literal === literal)` pruner can't strip,
+// but which are guaranteed truthy at runtime in Node *and* browsers, so the
+// enclosed block always executes harmlessly. A strong decompiler can still fold
+// them — that's the accepted ceiling for this class of tool.
+const OPAQUE_PREDICATES = [
+  "typeof Date.now === 'function'",
+  "typeof Math.max === 'function'",
+  "(Array.isArray([])===true && typeof []==='object')",
+  "void 0 === void 0",
+  "typeof parseInt === 'function' && parseInt('0x10',16)===16",
+].map((s) => parse(s, { target: "script" }).body[0].expression);
+
+// A self-contained block guarded by a runtime-true opaque predicate. The block
+// performs harmless, real-looking work so it can't be mistaken for dead code.
 function deadStatement() {
-  const name = randName();
-  const fresh = randName();
-  const guard = "veil-" + Math.random().toString(36).slice(2);
+  const probe = randName();
+  const pred = OPAQUE_PREDICATES[(Math.random() * OPAQUE_PREDICATES.length) | 0];
   return {
     type: "BlockStatement",
     body: [
-      VariableDeclaration("var", [
-        VariableDeclarator(Identifier(name), StringLiteral(guard)),
-      ]),
-      IfStatement(
-        BinaryExpression("===", Identifier(name), StringLiteral(randName() + randName())),
-        {
-          type: "BlockStatement",
-          body: [ExpressionStatement(CallExpression(Identifier(fresh), []))],
-        },
-      ),
+      IfStatement(pred, {
+        type: "BlockStatement",
+        body: [
+          VariableDeclaration("var", [
+            VariableDeclarator(Identifier(probe), StringLiteral("veil-" + Math.random().toString(36).slice(2))),
+          ]),
+          ExpressionStatement(
+            BinaryExpression(
+              "+",
+              Identifier(probe),
+              { type: "Literal", value: "", raw: "''" },
+            ),
+          ),
+        ],
+      }),
     ],
   };
 }
