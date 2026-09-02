@@ -11,6 +11,7 @@ export const DEFAULT_OPTIONS = {
   stringArrayWrappersCount: 3,
   hostGate: false,
   serverDecode: null,
+  tierC: null,
   globalResolver: false,
   lengthSpoofing: false,
   opaquePredicates: false,

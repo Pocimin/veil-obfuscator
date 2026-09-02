@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { obfuscate } from "./index.js";
-import { createSessionStore, issueToken, returnKey, registerSession } from "./server-auth.js";
+import { createSessionStore, issueToken, returnKey, registerSession, probeScore, RPC } from "./server-auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -108,6 +108,26 @@ const server = createServer(async (req, res) => {
     const status = r.status || 200;
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(r));
+    return;
+  }
+
+  // Tier C: the SERVER owns the logic. The client sends only the probe + args;
+  // the server decides. The sensitive rule/flag/secret never ships to the client.
+  if (req.method === "POST" && url.pathname === "/api/rpc") {
+    const body = await readBody(req);
+    if (probeScore(body.probeHash) < 8) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "attestation failed" }));
+      return;
+    }
+    const handler = RPC[body.fn];
+    if (!handler) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "unknown rpc" }));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result: handler(body.args) }));
     return;
   }
 

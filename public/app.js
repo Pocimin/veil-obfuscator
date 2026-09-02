@@ -18,6 +18,9 @@ function buildOptions() {
   if (toBoolean($("o-domainLock")) && $("domain").value.trim()) {
     opts.domainLock = [$("domain").value.trim()];
   }
+  if (toBoolean($("o-serverDecode"))) {
+    opts.serverDecode = $("serverDecodeUrl").value.trim() || true;
+  }
   return opts;
 }
 
@@ -32,6 +35,8 @@ $("preset").addEventListener("change", () => {
   $("o-vm").checked = p === "vm";
   $("o-debugProtection").checked = p !== "light" && p !== "vm";
   $("o-selfDefending").checked = p !== "light";
+  // vm preset has no string layer, so server-decode is irrelevant there.
+  $("o-serverDecode").disabled = p === "vm";
 });
 
 $("copy").addEventListener("click", () => {

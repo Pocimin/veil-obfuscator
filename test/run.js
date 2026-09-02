@@ -227,5 +227,19 @@ try {
   check("Tier A auth flow", false, e.message);
 }
 
+// 15. Tier C: the sensitive function body is replaced by an attested RPC; the
+//     logic ships server-side, so a dump of the bundle reveals no decision/flag.
+try {
+  const { code } = obfuscate(
+    'function decideExam(a){ return { allowed:true, flag:false }; } const r = decideExam("tok"); console.log(r);',
+    { preset: "light", stringArray: true, stringArrayThreshold: 1, tierC: { fn: "decideExam", endpoint: "/api/rpc" }, renameIdentifiers: false, debugProtection: false, selfDefending: false, deadCodeInjection: 0, controlFlowFlattening: 0 },
+  );
+  const noLogic = !/allowed|flag|return \{|decideExam/.test(code);
+  const rpcShell = /XMLHttpRequest/.test(code);
+  check("Tier C: sensitive logic removed, RPC shell ships", noLogic && rpcShell);
+} catch (e) {
+  check("Tier C: sensitive logic removed, RPC shell ships", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

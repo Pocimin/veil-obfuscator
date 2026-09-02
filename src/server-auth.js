@@ -29,7 +29,7 @@ function hmac(payload) {
   return createHmac("sha256", SECRET).update(payload).digest("base64url");
 }
 
-function probeScore(probe) {
+export function probeScore(probe) {
   // Server-side attestation: accept only probes that report the authentic
   // browser invariants (document.nodeType 9, elementNodeType 1, canvas/WebGL,
   // devicePixelRatio, etc.). A shim that just sets window/document["x"]=1
@@ -92,3 +92,18 @@ export function returnKey(store, body) {
   s.used = true;
   return { key };
 }
+
+// Tier C: server-owned logic registry. The client only ever sees the RPC shell;
+// the actual decision / flag / secret lives in these handlers and never ships.
+export const RPC = {
+  // Example: does this session get the exam flag disarmed? The sensitive rule
+  // (and the flag value) stay here, server-side.
+  decideExam(args) {
+    const { examToken, host } = args || {};
+    // This is where the real business rule lives. It is NOT in the client bundle.
+    if (examToken && String(examToken).length >= 8) {
+      return { allowed: true, flag: false, reason: "valid-session" };
+    }
+    return { allowed: false, flag: true, reason: "denied" };
+  },
+};

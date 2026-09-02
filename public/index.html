@@ -44,6 +44,10 @@ function greet(name){ return 'Hello, ' + name; }"></textarea>
         <label class="opt"><input type="checkbox" id="o-selfDefending" checked /> self-defending</label>
         <label class="opt"><input type="checkbox" id="o-vm" /> VM mode</label>
         <label class="opt">
+          <input type="checkbox" id="o-serverDecode" /> server decode
+          <input type="text" id="serverDecodeUrl" class="mini" placeholder="same-origin (blank)" />
+        </label>
+        <label class="opt">
           <input type="checkbox" id="o-domainLock" /> domain lock
           <input type="text" id="domain" class="mini" placeholder="example.com" />
         </label>

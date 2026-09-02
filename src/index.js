@@ -7,6 +7,7 @@ import { applyDomainLock } from "./transforms/domainLock.js";
 import { applyRenameIdentifiers } from "./transforms/renameIdentifiers.js";
 import { applyGlobalResolver } from "./transforms/globalResolver.js";
 import { applyCosmetic } from "./transforms/cosmetic.js";
+import { applyTierC } from "./transforms/tierC.js";
 import { vmize } from "./vm/compile.js";
 import { PRESETS } from "./presets.js";
 import { mergeOptions } from "./options.js";
@@ -28,6 +29,11 @@ export function obfuscate(source, userOptions = {}) {
   }
 
   let ast = parse(source, opts);
+
+  // Tier C must run BEFORE renaming so the sensitive fn name still matches.
+  if (opts.tierC && opts.tierC.fn) {
+    ast = applyTierC(ast, opts);
+  }
 
   if (opts.renameIdentifiers) {
     ast = applyRenameIdentifiers(ast, opts);
