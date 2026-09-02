@@ -2,21 +2,21 @@ export const DEFAULT_OPTIONS = {
   preset: "balanced",
 
   stringArray: true,
-  stringArrayThreshold: 0.8,
+  stringArrayThreshold: 1,
   stringArrayEncoding: ["rc4"],
   rotateStringArray: true,
   shuffleStringArray: true,
   stringArrayGate: false,
-  stringArrayLzw: false,
+  stringArrayLzw: true,
   stringArrayWrappersCount: 3,
   hostGate: false,
   serverDecode: null,
   tierC: null,
-  globalResolver: false,
-  lengthSpoofing: false,
-  opaquePredicates: false,
-  cosmetic: false,
-  aggressiveCF: false,
+  globalResolver: true,
+  lengthSpoofing: true,
+  opaquePredicates: true,
+  cosmetic: true,
+  aggressiveCF: true,
 
   // Anti-dump: only decode when a runtime probe passes. Off by default.
   // stringArrayGate: JS expression evaluated at load in the target host. If it
@@ -31,18 +31,18 @@ export const DEFAULT_OPTIONS = {
   // chained loader: entries are lazy/order-coupled, so there is no pre-decoded
   // array to dump and no single round function to reverse. Off by default (the
   // classic loader is faster and the Node test harness still self-hosts).
-  stringArrayChain: false,
+  stringArrayChain: true,
 
-  controlFlowFlattening: 0.5,
+  controlFlowFlattening: 0.7,
   controlFlowFlatteningThreshold: 0.75,
 
   deadCodeInjection: 0.3,
   deadCodeInjectionThreshold: 0.4,
 
-  debugProtection: false,
+  debugProtection: true,
   debugProtectionInterval: 2000,
 
-  selfDefending: false,
+  selfDefending: true,
 
   disableConsole: false,
 
@@ -50,10 +50,10 @@ export const DEFAULT_OPTIONS = {
 
   vm: false,
 
-  target: "node",
+  target: "browser",
   comment: false,
   identifierNamesGenerator: "hexadecimal",
-  renameIdentifiers: false,
+  renameIdentifiers: true,
   renameProperties: false,
   renameGlobals: false,
   sourceMap: false,

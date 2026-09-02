@@ -12,16 +12,17 @@ export const PRESETS = {
     vm: false,
   },
 
-  // Recommended default. Keeps runtime within a few % of original.
+  // Recommended default (obfuscator.io-like). Strong but cross-environment.
   balanced: {
     stringArray: true,
     stringArrayEncoding: ["rc4"],
     stringArrayThreshold: 1,
     stringArrayChain: true,
     stringArrayLzw: true,
+    stringArrayWrappersCount: 3,
     rotateStringArray: true,
     shuffleStringArray: true,
-    controlFlowFlattening: 0.5,
+    controlFlowFlattening: 0.7,
     deadCodeInjection: 0.3,
     debugProtection: true,
     debugProtectionInterval: 2000,
@@ -29,6 +30,11 @@ export const PRESETS = {
     disableConsole: false,
     domainLock: [],
     renameIdentifiers: true,
+    globalResolver: true,
+    lengthSpoofing: true,
+    opaquePredicates: true,
+    aggressiveCF: true,
+    cosmetic: true,
     compact: true,
     vm: false,
   },

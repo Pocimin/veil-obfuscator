@@ -130,7 +130,17 @@ textarea[readonly] { color: var(--accent); opacity: .95; }
 .opt .mini { margin-left: auto; width: 110px; padding: 5px 8px; font-size: 12px; }
 input[type=checkbox] { accent-color: var(--accent); }
 
-.prose { margin-top: 16px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.group { margin-top: 14px; }
+.group h3 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 4px;
+}
+.prose { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
 .prose input[type=range] { flex: 1; accent-color: var(--accent); }
 .val { color: var(--text); min-width: 36px; }
 

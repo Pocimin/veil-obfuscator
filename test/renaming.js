@@ -7,7 +7,9 @@ function check(name, ok, extra = "") {
 }
 function run(code) {
   const logs = [];
-  new Function("console", code)({ log: (...a) => logs.push(a.join(" ")), warn(){}, error(){} });
+  const orig = globalThis.console;
+  globalThis.console = { log: (...a) => logs.push(a.join(" ")), warn(){}, error(){}, info(){} };
+  try { new Function(code)(); } finally { globalThis.console = orig; }
   return logs;
 }
 

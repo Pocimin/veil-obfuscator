@@ -36,27 +36,68 @@ function greet(name){ return 'Hello, ' + name; }"></textarea>
 
     <aside class="col options-col">
       <h2><span class="dot"></span> options</h2>
+
       <div class="opts">
         <label class="opt"><input type="checkbox" id="o-stringArray" checked /> string-array</label>
         <label class="opt"><input type="checkbox" id="o-controlFlow" checked /> control-flow flatten</label>
+        <label class="opt"><input type="checkbox" id="o-aggressiveCF" checked /> heavy state machine</label>
         <label class="opt"><input type="checkbox" id="o-deadCode" checked /> dead-code</label>
         <label class="opt"><input type="checkbox" id="o-debugProtection" checked /> debugger trap</label>
         <label class="opt"><input type="checkbox" id="o-selfDefending" checked /> self-defending</label>
-        <label class="opt"><input type="checkbox" id="o-vm" /> VM mode</label>
+      </div>
+
+      <div class="group">
+        <h3>strings</h3>
         <label class="opt">
-          <input type="checkbox" id="o-serverDecode" /> server decode
-          <input type="text" id="serverDecodeUrl" class="mini" placeholder="same-origin (blank)" />
+          encoding
+          <select id="o-stringArrayEncoding" class="mini">
+            <option value="rc4" selected>rc4</option>
+            <option value="base64">base64</option>
+            <option value="rc4,base64">rc4 + base64</option>
+          </select>
+        </label>
+        <label class="opt"><input type="checkbox" id="o-stringArrayLzw" checked /> LZW payload</label>
+        <label class="opt"><input type="checkbox" id="o-hostGate" /> host-gate key</label>
+        <label class="prose">
+          <strong>wrappers</strong>
+          <input type="number" id="o-wrappers" class="mini" min="1" max="8" value="3" />
+        </label>
+        <label class="prose">
+          <strong>threshold</strong>
+          <input type="range" id="threshold" min="0" max="1" step="0.05" value="1" />
+          <span id="thresholdVal" class="val">1.00</span>
+        </label>
+      </div>
+
+      <div class="group">
+        <h3>hardening</h3>
+        <label class="opt"><input type="checkbox" id="o-renameIdentifiers" checked /> rename identifiers</label>
+        <label class="opt"><input type="checkbox" id="o-globalResolver" checked /> global resolver</label>
+        <label class="opt"><input type="checkbox" id="o-opaquePredicates" checked /> opaque predicates</label>
+        <label class="opt"><input type="checkbox" id="o-cosmetic" checked /> cosmetic</label>
+        <label class="opt"><input type="checkbox" id="o-lengthSpoofing" checked /> .length spoofing</label>
+        <label class="opt"><input type="checkbox" id="o-compact" checked /> compact (single-line)</label>
+        <label class="prose">
+          <strong>debug interval</strong>
+          <input type="number" id="o-debugInterval" class="mini" min="0" step="100" value="2000" />
+        </label>
+      </div>
+
+      <div class="group">
+        <h3>server-side</h3>
+        <label class="opt"><input type="checkbox" id="o-serverDecode" /> server decode (Tier A)
+          <input type="text" id="serverDecodeUrl" class="mini" placeholder="same-origin" />
+        </label>
+        <label class="opt">
+          <input type="checkbox" id="o-tierC" /> Tier C RPC
+          <input type="text" id="tierCFn" class="mini" placeholder="fn name" />
+          <input type="text" id="tierCEndpoint" class="mini" placeholder="/api/rpc" />
         </label>
         <label class="opt">
           <input type="checkbox" id="o-domainLock" /> domain lock
           <input type="text" id="domain" class="mini" placeholder="example.com" />
         </label>
         <label class="opt"><input type="checkbox" id="o-disableConsole" /> wipe console</label>
-      </div>
-      <div class="prose">
-        <strong>string-array threshold</strong>
-        <input type="range" id="threshold" min="0" max="1" step="0.05" value="0.8" />
-        <span id="thresholdVal" class="val">0.80</span>
       </div>
     </aside>
 

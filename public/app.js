@@ -4,13 +4,26 @@ const toBoolean = (el) => el.checked;
 const toNumber = (el) => Number(el.value);
 
 function buildOptions() {
+  const enc = $("o-stringArrayEncoding").value;
   const opts = {
     preset: $("preset").value,
     stringArray: toBoolean($("o-stringArray")),
-    controlFlowFlattening: toBoolean($("o-controlFlow")) ? 0.6 : 0,
-    deadCodeInjection: toBoolean($("o-deadCode")) ? 0.4 : 0,
+    stringArrayEncoding: enc.includes(",") ? enc.split(",") : [enc],
+    stringArrayLzw: toBoolean($("o-stringArrayLzw")),
+    stringArrayWrappersCount: toNumber($("o-wrappers")),
+    hostGate: toBoolean($("o-hostGate")),
+    controlFlowFlattening: toBoolean($("o-controlFlow")) ? 0.7 : 0,
+    aggressiveCF: toBoolean($("o-aggressiveCF")),
+    deadCodeInjection: toBoolean($("o-deadCode")) ? 0.3 : 0,
     debugProtection: toBoolean($("o-debugProtection")),
+    debugProtectionInterval: toNumber($("o-debugInterval")),
     selfDefending: toBoolean($("o-selfDefending")),
+    renameIdentifiers: toBoolean($("o-renameIdentifiers")),
+    globalResolver: toBoolean($("o-globalResolver")),
+    opaquePredicates: toBoolean($("o-opaquePredicates")),
+    cosmetic: toBoolean($("o-cosmetic")),
+    lengthSpoofing: toBoolean($("o-lengthSpoofing")),
+    compact: toBoolean($("o-compact")),
     vm: toBoolean($("o-vm")),
     disableConsole: toBoolean($("o-disableConsole")),
     stringArrayThreshold: toNumber($("threshold")),
@@ -20,6 +33,9 @@ function buildOptions() {
   }
   if (toBoolean($("o-serverDecode"))) {
     opts.serverDecode = $("serverDecodeUrl").value.trim() || true;
+  }
+  if (toBoolean($("o-tierC")) && $("tierCFn").value.trim()) {
+    opts.tierC = { fn: $("tierCFn").value.trim(), endpoint: $("tierCEndpoint").value.trim() || "/api/rpc" };
   }
   return opts;
 }
@@ -32,11 +48,27 @@ $("threshold").addEventListener("input", () => {
 // overridden by stale checkbox state (e.g. vm preset with "VM mode" unchecked).
 $("preset").addEventListener("change", () => {
   const p = $("preset").value;
-  $("o-vm").checked = p === "vm";
-  $("o-debugProtection").checked = p !== "light" && p !== "vm";
-  $("o-selfDefending").checked = p !== "light";
-  // vm preset has no string layer, so server-decode is irrelevant there.
-  $("o-serverDecode").disabled = p === "vm";
+  const strong = p !== "light";
+  const on = (id, v) => { const el = $(id); if (el && el.type === "checkbox") el.checked = v; };
+  on("o-vm", p === "vm");
+  on("o-stringArray", true);
+  on("o-controlFlow", strong);
+  on("o-aggressiveCF", strong);
+  on("o-deadCode", strong);
+  on("o-debugProtection", strong && p !== "vm");
+  on("o-selfDefending", strong && p !== "vm");
+  on("o-stringArrayLzw", strong);
+  on("o-hostGate", p === "max");
+  on("o-renameIdentifiers", strong);
+  on("o-globalResolver", strong);
+  on("o-opaquePredicates", strong);
+  on("o-cosmetic", strong);
+  on("o-lengthSpoofing", strong);
+  on("o-compact", strong);
+  // vm preset has no string layer, so string/server opts are irrelevant there.
+  ["o-hostGate", "o-stringArrayEncoding", "o-wrappers", "o-serverDecode", "o-tierC", "threshold"].forEach(
+    (id) => { const el = $(id); if (el) el.disabled = p === "vm"; },
+  );
 });
 
 $("copy").addEventListener("click", () => {

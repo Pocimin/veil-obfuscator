@@ -20,10 +20,12 @@ function check(name, ok, extra = "") {
 }
 
 function run(code) {
-  // Evaluate in a fresh context with a console spy.
+  // Evaluate in a fresh context with a console spy. The global resolver routes
+  // console through globalThis, so patch the global like a real env would.
   const logs = [];
-  const fn = new Function("console", code);
-  fn({ log: (...a) => logs.push(a.join(" ")), warn: () => {}, error: () => {} });
+  const orig = globalThis.console;
+  globalThis.console = { log: (...a) => logs.push(a.join(" ")), warn: () => {}, error: () => {}, info: () => {} };
+  try { new Function(code)(); } finally { globalThis.console = orig; }
   return logs;
 }
 
