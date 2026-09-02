@@ -10,6 +10,7 @@ export const DEFAULT_OPTIONS = {
   stringArrayLzw: false,
   stringArrayWrappersCount: 3,
   hostGate: false,
+  serverDecode: null,
   globalResolver: false,
   lengthSpoofing: false,
   opaquePredicates: false,

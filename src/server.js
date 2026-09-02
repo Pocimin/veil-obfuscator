@@ -63,6 +63,15 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Session string table for serverDecode mode. In a real deployment this would
+  // be gated per authenticated session; here it serves a placeholder table so
+  // the round-trip client loader can be exercised.
+  if (req.method === "GET" && url.pathname === "/api/session") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ table: ["session", "server", "decoded", "strings"] }));
+    return;
+  }
+
   if (req.method === "GET") {
     serveStatic(url.pathname, res);
     return;

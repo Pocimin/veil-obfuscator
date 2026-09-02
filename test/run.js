@@ -187,5 +187,22 @@ try {
   check("hostGate: Node run yields garbage", false, e.message);
 }
 
+// 13. Server round-trip: with serverDecode set, the bundle ships NO string
+//     pool and NO decoder (only a fetch URL). A dump has neither plaintext nor
+//     a working loader.
+try {
+  const { code } = obfuscate('console.log("a secret string value");', {
+    preset: "balanced", stringArray: true, stringArrayThreshold: 1, serverDecode: "/api/session",
+    debugProtection: false, selfDefending: false, deadCodeInjection: 0, controlFlowFlattening: 0,
+    globalResolver: false, renameIdentifiers: false,
+  });
+  const noPool = !code.includes("a secret string value");
+  const noDecoder = !/s\[i\]=i|0x811c9dc5|dict\[i\]/.test(code);
+  const hasFetch = /XMLHttpRequest/.test(code);
+  check("serverDecode: no plaintext, no decoder, fetches", noPool && noDecoder && hasFetch);
+} catch (e) {
+  check("serverDecode: no plaintext, no decoder, fetches", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

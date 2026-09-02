@@ -38,6 +38,7 @@ Options:
     --aggressive-cf         Heavy 3-register state-machine dispatcher
     --length-spoofing       Spoof .length on runtime helpers (rest-args)
     --host-gate             Bake a browser host probe into the decode key (anti-dump)
+    --server-decode <url>   Fetch strings per-session from a server (no decoder shipped)
     --vm-bytecode-encoding  Encrypt the VM bytecode blob
     --vm-stateful-opcodes   Position-dependent opcode mapping
     --vm-macro-ops          Fuse repeated instruction pairs into macros
@@ -110,6 +111,9 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--host-gate":
       options.hostGate = true;
+      break;
+    case "--server-decode":
+      options.serverDecode = args[++i];
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

@@ -107,12 +107,15 @@ export function chainedLoaderSource(ctx) {
       ? `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D} + (${probeV}P[${i}] ^ ${probeV}E[${i}])) & 0xff`
       : `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`;
 
+  const rotDef = `
+  var ${rotV} = (${poolV}.length * 0x9e37 + 0x123) % ${Math.max(1, N)};
+  for (var r_ = 0; r_ < ${rotV}; r_++) ${poolV}.push(${poolV}.shift());
+${probeSrc}`;
+
   const keySource = (() => {
     const parts = [];
     for (let i = 0; i < 16; i++) parts.push(keyTerm(i));
     return `
-  var ${rotV} = (${poolV}.length * 0x9e37 + 0x123) % ${Math.max(1, N)};
-${probeSrc}
   var ${keyV} = String.fromCharCode(${parts.join(",")});`;
   })();
 
@@ -142,7 +145,7 @@ ${probeSrc}
 
   const poolDef = lzw
     ? `${lzwDecompressSource(lzwName)}
-  var ${poolV} = JSON.parse(${lzwName}(${JSON.stringify(lzw)}));`
+  var ${poolV} = JSON.parse(${lzwName}(${b64}(${JSON.stringify(lzw)})));`
     : `  var ${poolV} = ${JSON.stringify(raw)};`;
 
   const gateDef = gate ? `  var ${gateV} = (function(){ return (${gate}); })();` : `  var ${gateV} = 1;`;
@@ -185,9 +188,10 @@ ${decodeSteps}
 
   return `
 var ${arrayName} = (function(){
-${poolDef}
-${keySource}
 ${prims}
+${poolDef}
+${rotDef}
+${keySource}
   function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
   function ${prg}(seed,len){ var s=seed>>>0||1; var o=[]; for(var i=0;i<len;i++){ s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;o.push(s&255); } return o; }
   var ${chainV} = 0x811c9dc5;
@@ -210,4 +214,37 @@ export function obfuscateIndex(i) {
   // Evaluates to `i`: (X ^ 0x5a) where X = i ^ 0x5a.
   const x = ((i ^ 0x5a) & 0xff).toString(16).padStart(2, "0");
   return `(0x${x} ^ 0x5a)`;
+}
+
+/**
+ * Server round-trip loader. The bundle ships NO string pool and NO decoder —
+ * the strings are fetched per-session from `url` and resolved at runtime. A
+ * dump therefore has neither plaintext nor a working decoder; only the fetch
+ * URL sits in the bundle. The server must gate/return the table per session.
+ */
+export function serverDecodeLoaderSource(ctx) {
+  const { arrayName, fnName, url, wrappers } = ctx;
+  const tv = nm(50), rv = nm(51);
+  const wrapN = Math.max(1, wrappers || 3);
+
+  const poolFetch = `
+var ${arrayName} = (function(){
+  var ${tv} = null;
+  try {
+    var ${rv} = new XMLHttpRequest();
+    ${rv}.open("GET", ${JSON.stringify(url)} + "?sid=" + Math.random().toString(36).slice(2), false);
+    ${rv}.send();
+    ${tv} = JSON.parse(${rv}.responseText).table;
+  } catch (e) { ${tv} = { table: [] }; }
+  return function(_i){ return ${tv} ? ${tv}[_i] : ""; };
+})();
+`;
+  let inner = `${arrayName}(_i)`;
+  const wrappersSrc = [];
+  for (let i = 0; i < wrapN - 1; i++) {
+    const wn = nm(52 + i);
+    wrappersSrc.push(`function ${wn}(_i){ return ${inner}; }`);
+    inner = `${wn}(_i)`;
+  }
+  return `${poolFetch}\n${wrappersSrc.join("\n")}\nfunction ${fnName}(_i){ return ${inner}; }\n`;
 }

@@ -1,9 +1,10 @@
 import { parse } from "../parse.js";
 import * as walk from "acorn-walk";
-import { encodeString, runtimeDecoderSource } from "./rc4.js";
+import { encodeString, runtimeDecoderSource, base64Encode } from "./rc4.js";
 import {
   encodeStringsChained,
   chainedLoaderSource,
+  serverDecodeLoaderSource,
   lzwCompress,
   rotationFor,
   deriveKey,
@@ -85,7 +86,14 @@ export function applyStringArray(program, opts) {
     ? encodeStringsChained([...pool.keys()], encoderOpts, key)
     : [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
 
-  const decoderSource = useChain
+  const decoderSource = opts.serverDecode
+    ? serverDecodeLoaderSource({
+        arrayName,
+        fnName,
+        url: opts.serverDecode,
+        wrappers: opts.stringArrayWrappersCount ?? 3,
+      })
+    : useChain
     ? chainedLoaderSource({
         arrayName,
         fnName,
@@ -93,7 +101,7 @@ export function applyStringArray(program, opts) {
         raw,
         gate: opts.stringArrayGate,
         gateFail: opts.stringArrayGateFail,
-        lzw: opts.stringArrayLzw ? lzwCompress(JSON.stringify(raw)) : null,
+        lzw: opts.stringArrayLzw ? base64Encode(lzwCompress(JSON.stringify(raw))) : null,
         wrappers: opts.stringArrayWrappersCount ?? 3,
         hostGate: opts.hostGate,
       })
