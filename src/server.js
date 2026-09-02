@@ -55,6 +55,18 @@ function readBody(req) {
 }
 
 const server = createServer(async (req, res) => {
+  // CORS: allow the obfuscated bundle to run on ANY origin and handshake to this
+  // server (Tier A key fetch / Tier C RPC). In production, restrict this to your
+  // allowed origins instead of "*".
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   // CLI-style API: POST /api/obfuscate { source, options }
