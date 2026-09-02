@@ -171,5 +171,21 @@ try {
   check("opaque/cosmetic tests", false, e.message);
 }
 
+// 12. Host-gated, key-entangled decode: with hostGate on, running under Node
+//     (no real browser) yields garbage — the anti-dump gate actually closes.
+try {
+  const { code } = obfuscate('console.log("hostgate_plaintext");', {
+    preset: "balanced", stringArrayThreshold: 1, hostGate: true,
+    debugProtection: false, selfDefending: false, deadCodeInjection: 0, controlFlowFlattening: 0,
+    globalResolver: false, renameIdentifiers: false,
+  });
+  const logs = [];
+  new Function("console", code)({ log: (...x) => logs.push(x.join(" ")) });
+  const leaked = JSON.stringify(logs).includes("hostgate_plaintext");
+  check("hostGate: Node run yields garbage (no plaintext)", !leaked, JSON.stringify(logs));
+} catch (e) {
+  check("hostGate: Node run yields garbage", false, e.message);
+}
+
 console.log(`\n  ${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -37,6 +37,7 @@ Options:
     --cosmetic              Cosmetic hardening (!0x1 / void 0)
     --aggressive-cf         Heavy 3-register state-machine dispatcher
     --length-spoofing       Spoof .length on runtime helpers (rest-args)
+    --host-gate             Bake a browser host probe into the decode key (anti-dump)
     --vm-bytecode-encoding  Encrypt the VM bytecode blob
     --vm-stateful-opcodes   Position-dependent opcode mapping
     --vm-macro-ops          Fuse repeated instruction pairs into macros
@@ -106,6 +107,9 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--length-spoofing":
       options.lengthSpoofing = true;
+      break;
+    case "--host-gate":
+      options.hostGate = true;
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

@@ -99,6 +99,7 @@ export function applyStringArray(program, opts) {
         gateFail: opts.stringArrayGateFail,
         lzw: opts.stringArrayLzw ? lzwCompress(JSON.stringify(raw)) : null,
         wrappers: opts.stringArrayWrappersCount ?? 3,
+        hostGate: opts.hostGate,
       })
     : runtimeDecoderSource({
         arrayName,

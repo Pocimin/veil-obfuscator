@@ -59,19 +59,52 @@ function nm(p) { return "_0x" + ((Math.random() * 0xffffff) | 0).toString(16) + 
  * `ctx`: arrayName, fnName, encodings, raw, gate, gateFail, lzw, wrappers.
  */
 export function chainedLoaderSource(ctx) {
-  const { arrayName, fnName, encodings, raw, gate, gateFail, lzw, wrappers } = ctx;
+  const { arrayName, fnName, encodings, raw, gate, gateFail, lzw, wrappers, hostGate } = ctx;
   const N = raw.length;
   const R = rotationFor(N);
 
   const keyV = nm(1), poolV = nm(2), chainV = nm(3), boxV = nm(4), gateV = nm(5);
-  const rotV = nm(6), fx = nm(7), fxo = nm(8);
+  const rotV = nm(6), fx = nm(7), probeV = nm(8);
   const rc = nm(9), b64 = nm(10), fnv = nm(11), prg = nm(12), lzwName = lzw ? nm(13) : "";
+
+  // Host-gated, key-entangled decode. A `probe()` returns authentic browser
+  // bytes (invariant across real browsers, absent in Node/emulators). The probe
+  // is folded into the KEY bytes, not a boolean: `key[ i ] = base + (probe[i] ^
+  // EXPECTED[i])`. In a real browser probe==EXPECTED so the key is correct; in
+  // Node an LLM-emulator or a shim the XOR is non-zero -> wrong key -> garbage,
+  // even if the shim makes every 'typeof' check "pass".
+  const EXPECTED = [9, 1, 1, 1, 1, 1, 1, 1]; // document.nodeType, elementNodeType, MutationObserver, window.self, createElement, getElementById, documentElement.tagName, navigator.userAgent
+  const expectedJson = JSON.stringify(EXPECTED);
+
+  const probeSrc = hostGate
+    ? `
+  function ${probeV}(){
+    var b = [0,0,0,0,0,0,0,0];
+    try{ b[0] = document.nodeType & 0xff; }catch(e){}
+    try{ b[1] = (document.documentElement && document.documentElement.nodeType) & 0xff; }catch(e){}
+    try{ b[2] = (typeof MutationObserver === 'function' && typeof IntersectionObserver === 'function') ? 1 : 0; }catch(e){}
+    try{ b[3] = (typeof window !== 'undefined' && window.self === window) ? 1 : 0; }catch(e){}
+    try{ b[4] = document.createElement('div').nodeType & 0xff; }catch(e){}
+    try{ b[5] = (typeof document.getElementById === 'function') ? 1 : 0; }catch(e){}
+    try{ b[6] = (document.documentElement && document.documentElement.tagName === 'HTML') ? 1 : 0; }catch(e){}
+    try{ b[7] = (typeof navigator === 'object' && typeof navigator.userAgent === 'string') ? 1 : 0; }catch(e){}
+    return b;
+  }
+  var ${probeV}E = ${expectedJson};
+  var ${probeV}P = ${probeV}();`
+    : "";
+
+  const keyTerm = (i) =>
+    hostGate && i < 8
+      ? `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D} + (${probeV}P[${i}] ^ ${probeV}E[${i}])) & 0xff`
+      : `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`;
 
   const keySource = (() => {
     const parts = [];
-    for (let i = 0; i < 16; i++) parts.push(`(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`);
+    for (let i = 0; i < 16; i++) parts.push(keyTerm(i));
     return `
   var ${rotV} = (${poolV}.length * 0x9e37 + 0x123) % ${Math.max(1, N)};
+${probeSrc}
   var ${keyV} = String.fromCharCode(${parts.join(",")});`;
   })();
 

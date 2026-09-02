@@ -40,6 +40,7 @@ export const PRESETS = {
     stringArrayThreshold: 1,
     stringArrayChain: true,
     stringArrayLzw: true,
+    hostGate: true,
     stringArrayGate: true,
     rotateStringArray: true,
     shuffleStringArray: true,
