@@ -208,23 +208,27 @@ try {
   check("Tier A: no key, no plaintext, handshake, encrypted pool", false, e.message);
 }
 
-// 14. Tier A auth flow: register -> issue token -> attestation gates the key.
+// 14. Tier A auth flow: derive key from sid (HMAC), issue token -> attestation
+//     gates the key; key is reproducible and one-time token is enforced.
 try {
   const auth = await import("../src/server-auth.js");
   const store = auth.createSessionStore();
   const sid = "sess-test-1";
-  const KEY = "0123456789abcdef";
-  auth.registerSession(store, sid, KEY, "fp1");
+  const KEY = auth.keyFor(sid); // derived, not stored
   const tok = auth.issueToken(store, "1.2.3.4", sid, "fp1");
   const good = auth.returnKey(store, { sid, nonce: tok.nonce, sig: tok.sig, fingerprint: "fp1", probeHash: [9,1,1,1,1,1,1,1,1,1,1,1] });
-  check("Tier A auth: good attestation returns key", good.key === KEY, JSON.stringify(good));
+  check("Tier A auth: good attestation returns derived key", good.key === KEY, JSON.stringify(good));
   const again = auth.returnKey(store, { sid, nonce: tok.nonce, sig: tok.sig, fingerprint: "fp1", probeHash: [9,1,1,1,1,1,1,1,1,1,1,1] });
   check("Tier A auth: one-time (reuse rejected)", again.status === 401, JSON.stringify(again));
   const sid2 = "sess-test-2";
-  auth.registerSession(store, sid2, "abcdefghijklmnop", "fp2");
   const tok2 = auth.issueToken(store, "5.6.7.8", sid2, "fp2");
   const badProbe = auth.returnKey(store, { sid: sid2, nonce: tok2.nonce, sig: tok2.sig, fingerprint: "fp2", probeHash: [0,0,0,0,0,0,0,0,0,0,0,0] });
   check("Tier A auth: bad attestation rejected", badProbe.status === 403, JSON.stringify(badProbe));
+  // surviving a "restart": a fresh store (no state) still derives the same key
+  const fresh = auth.createSessionStore();
+  const tok3 = auth.issueToken(fresh, "9.9.9.9", sid, "fp1");
+  const after = auth.returnKey(fresh, { sid, nonce: tok3.nonce, sig: tok3.sig, fingerprint: "fp1", probeHash: [9,1,1,1,1,1,1,1,1,1,1,1] });
+  check("Tier A auth: survives restart (derived key)", after.key === KEY, JSON.stringify(after));
 } catch (e) {
   check("Tier A auth flow", false, e.message);
 }

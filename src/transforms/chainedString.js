@@ -293,7 +293,9 @@ export function serverKeyLoaderSource(ctx) {
     for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
       b=(b<<6)|v; bs+=6; if(bs>=8){ bs-=8; out.push((b>>bs)&255); } }
     return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
-  }`;
+  }
+  function ${prg}(seed,len){ var s=seed>>>0||1; var o=[]; for(var i=0;i<len;i++){ s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;o.push(s&255); } return o; }
+  function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }`;
 
   // Inline real-browser probe (hidden host lookups) to report for attestation.
   const cc = (s) => "[" + [...s].map((c) => c.charCodeAt(0)).join(",") + "]";
