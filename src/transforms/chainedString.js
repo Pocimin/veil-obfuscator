@@ -256,3 +256,119 @@ var ${arrayName} = (function(){
   }
   return `${poolFetch}\n${wrappersSrc.join("\n")}\nfunction ${fnName}(_i){ return ${inner}; }\n`;
 }
+
+/**
+ * Tier A: ship the ENCRYPTED pool + a loader that fetches the decode KEY from
+ * the server out-of-band. The bundle contains NO key and NO plaintext; the key
+ * is only delivered after a server-validated one-time session (HMAC token +
+ * server-side attestation). A static dump or shimmed browser gets nothing.
+ */
+export function serverKeyLoaderSource(ctx) {
+  const { arrayName, fnName, encodings, raw, url, sid, wrappers, fingerprint } = ctx;
+  const N = raw.length;
+  const keyV = nm(1), poolV = nm(2), chainV = nm(3), boxV = nm(4);
+  const fx = nm(5), rc = nm(6), b64 = nm(7), fnv = nm(8), prg = nm(9);
+  const X = nm(10), T = nm(11), K = nm(12), F = nm(13), FP = nm(14), R = nm(15);
+
+  const steps = [];
+  for (const enc of [...encodings].reverse()) {
+    if (enc === "base64") steps.push(`w=${b64}(w);`);
+    else if (enc === "rc4") steps.push(`w=${rc}(w,${keyV});`);
+  }
+  const decodeSteps = steps.length ? steps.join("\n") : "";
+
+  const prims = `
+  function ${rc}(d, k){
+    var s=[], j=0, a=0, b=0, o='';
+    for(var i=0;i<256;i++) s[i]=i;
+    for(i=0;i<256;i++){ j=(j+s[i]+k.charCodeAt(i%k.length))%256; var t=s[i]; s[i]=s[j]; s[j]=t; }
+    for(i=0;i<d.length;i++){ a=(a+1)%256; b=(b+s[a])%256; var t2=s[a]; s[a]=s[b]; s[b]=t2;
+      o+=String.fromCharCode(d.charCodeAt(i)^s[(s[a]+s[b])%256]); }
+    return o;
+  }
+  function ${b64}(str){
+    var C='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', b=0, bs=0, out=[];
+    var clean=str.replace(/=+$/,'');
+    for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
+      b=(b<<6)|v; bs+=6; if(bs>=8){ bs-=8; out.push((b>>bs)&255); } }
+    return decodeURIComponent(escape(String.fromCharCode.apply(null,out)));
+  }`;
+
+  // Inline real-browser probe (hidden host lookups) to report for attestation.
+  const cc = (s) => "[" + [...s].map((c) => c.charCodeAt(0)).join(",") + "]";
+  const H = nm(16), G = nm(17);
+  const h = (s) => `${H}(${cc(s)})`;
+  const probeArr = `
+  var ${G} = globalThis;
+  function ${H}(a){ return ${G}[String.fromCharCode.apply(null,a)]; }
+  var ${F} = [
+    (function(){try{return ((${h("document")}||{}).nodeType)&0xff}catch(e){return 0}})(),
+    (function(){try{return ((${h("document")}.documentElement&&${h("document")}.documentElement.nodeType))&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("MutationObserver")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("window")}!=='undefined'&&${h("window")}.self===${h("window")})?1:0}catch(e){return 0}})(),
+    (function(){try{return ${h("document")}.createElement&&${h("document")}.createElement('div').nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.getElementById==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.documentElement&&${h("document")}.documentElement.tagName==='HTML')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("navigator")}==='object'&&typeof ${h("navigator")}.userAgent==='string')?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.createElement&&${h("document")}.createElement('canvas').getContext&&typeof ${h("WebGLRenderingContext")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("window")}.devicePixelRatio==='number'&&${h("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("screen")}==='object'&&${h("screen")}!==null)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.querySelector==='function')?1:0}catch(e){return 0}})()
+  ];`;
+
+  // Handshake: register the session, get a token, attest, receive the key once.
+  const handshake = `
+  var ${K} = null;
+  try {
+    var ${FP} = ${JSON.stringify(fingerprint || "veil-" + sid.slice(0, 6))};
+    var ${X} = new XMLHttpRequest();
+    ${X}.open("POST", ${JSON.stringify(url)} + "/api/session", false); ${X}.setRequestHeader("Content-Type","application/json");
+    ${X}.send(JSON.stringify({ sid: ${JSON.stringify(sid)}, fingerprint: ${FP} }));
+    var ${T} = JSON.parse(${X}.responseText);
+    var ${X} = new XMLHttpRequest();
+    ${X}.open("POST", ${JSON.stringify(url)} + "/api/key", false); ${X}.setRequestHeader("Content-Type","application/json");
+    ${X}.send(JSON.stringify({ sid: ${T}.sid, nonce: ${T}.nonce, sig: ${T}.sig, fingerprint: ${FP}, probeHash: ${F} }));
+    var ${R} = JSON.parse(${X}.responseText);
+    ${K} = ${R}.key;
+  } catch (e) { ${K} = ""; }`;
+
+  const poolDef = `  var ${poolV} = ${JSON.stringify(raw)};`;
+
+  const dy = `
+  function ${fx}(i){
+    if (${boxV}[i] !== undefined) return ${boxV}[i];
+    for (var k=0;k<=i;k++){
+      if (${boxV}[k] !== undefined) continue;
+      var w = ${poolV}[k];
+      var kb = ${prg}(${chainV}, w.length);
+      var t=''; for(var m=0;m<w.length;m++) t+=String.fromCharCode(w.charCodeAt(m)^kb[m]);
+      w=t;
+      var c = w;
+${decodeSteps}
+      ${boxV}[k] = w;
+      ${chainV} = ${chainV} ^ ${fnv}(c);
+    }
+    return ${boxV}[i];
+  }`;
+
+  const wrapN = Math.max(1, wrappers || 3);
+  const wrappersSrc = [];
+  let inner = `${arrayName}(_i)`;
+  for (let i = 0; i < wrapN - 1; i++) { const wn = nm(20 + i); wrappersSrc.push(`function ${wn}(_i){ return ${inner}; }`); inner = `${wn}(_i)`; }
+
+  return `
+var ${arrayName} = (function(){
+${prims}
+${probeArr}
+${handshake}
+${poolDef}
+${dy}
+  var ${keyV} = ${K};
+  var ${chainV} = 0x811c9dc5;
+  var ${boxV} = [];
+  return function(_i){ return ${fx}(_i); };
+})();
+${wrappersSrc.join("\n")}
+function ${fnName}(_i){ return ${inner}; }
+`;
+}

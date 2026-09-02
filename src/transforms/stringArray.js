@@ -4,7 +4,7 @@ import { encodeString, runtimeDecoderSource, base64Encode } from "./rc4.js";
 import {
   encodeStringsChained,
   chainedLoaderSource,
-  serverDecodeLoaderSource,
+  serverKeyLoaderSource,
   lzwCompress,
   rotationFor,
   deriveKey,
@@ -88,17 +88,25 @@ export function applyStringArray(program, opts) {
 
   const decoderSource = opts.serverDecode
     ? (() => {
+        // Tier A: ship the ENCRYPTED pool; the decode key comes from the server
+        // (HMAC one-time token + server-side attestation). No key/plaintext ships.
         const sid = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 20);
-        // Expose the extracted table + sid so the caller can register it with the
-        // server (build-time upload); the loader fetches by this sid at runtime.
-        if (opts._serverDecodeOut) opts._serverDecodeOut.sid = sid;
-        if (opts._serverDecodeOut) opts._serverDecodeOut.table = [...pool.keys()];
-        return serverDecodeLoaderSource({
+        const K = opts._decodeKey || deriveKey(n, R); // server flow always supplies _decodeKey
+        const raw = encodeStringsChained([...pool.keys()], encoderOpts, K);
+        if (opts._serverDecodeOut) {
+          opts._serverDecodeOut.sid = sid;
+          opts._serverDecodeOut.key = K;
+          opts._serverDecodeOut.table = [...pool.keys()];
+        }
+        return serverKeyLoaderSource({
           arrayName,
           fnName,
+          encodings: encoderOpts,
+          raw,
           url: opts.serverDecode,
-          wrappers: opts.stringArrayWrappersCount ?? 3,
           sid,
+          wrappers: opts.stringArrayWrappersCount ?? 3,
+          fingerprint: opts.fingerprint,
         });
       })()
     : useChain

@@ -3,13 +3,19 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { obfuscate } from "./index.js";
+import { createSessionStore, issueToken, returnKey, registerSession } from "./server-auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
 const PORT = Number(process.env.PORT) || 3000;
 
-// In-memory session table store for /api/session (server round-trip).
+// In-memory session table store for the server round-trip / Tier-A key flow.
 const SESSIONS = new Map();
+const AUTH = createSessionStore();
+
+function clientIp(req) {
+  return (req.socket?.remoteAddress || req.headers["x-forwarded-for"] || "0.0.0.0").split(",")[0].trim();
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -57,13 +63,18 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       if (typeof body.source !== "string") throw new Error("body.source is required");
       const opts = body.options || {};
+      // Tier A: build with an explicit random decode key, register it server-side
+      // under the baked sid, and return a bundle the loader keys off the server.
+      if (opts.serverDecode) {
+        const { randomBytes } = await import("node:crypto");
+        const K = randomBytes(16).toString("hex");
+        opts._decodeKey = K;
+      }
       const result = obfuscate(body.source, opts);
-      // Self-contained server round-trip: store the string table here so the
-      // returned bundle fetches it per-session (no strings shipped to the client).
       if (opts.serverDecode && result.serverDecode) {
-        // Store the string table server-side; do NOT echo it back to the caller.
-        SESSIONS.set(result.serverDecode.sid, result.serverDecode.table);
+        registerSession(AUTH, result.serverDecode.sid, opts._decodeKey, body.fingerprint);
         delete result.serverDecode.table;
+        delete result.serverDecode.key;
       }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
@@ -80,30 +91,39 @@ const server = createServer(async (req, res) => {
   // The obfuscator's serverDecode loader fetches the table by sid at runtime,
   // so the client bundle ships NO pool and NO decoder. Gate `sid` per session in
   // production (token/host); here it is an unguessable random id.
-  if (url.pathname === "/api/session") {
-    if (req.method === "POST") {
-      const body = await readBody(req);
-      // Accept a caller-supplied sid (from obfuscate's serverDecode) so the
-      // loader's baked sid matches; otherwise generate one.
-      const sid = body.sid || (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
-      SESSIONS.set(sid, body.table || []);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ sid }));
+  // Tier A: issue an HMAC, nonce-bound, one-time, expiring session token.
+  if (req.method === "POST" && url.pathname === "/api/session") {
+    const body = await readBody(req);
+    const r = issueToken(AUTH, clientIp(req), body.sid, body.fingerprint);
+    const status = r.status || 200;
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(r));
+    return;
+  }
+
+  // Tier A: after the server-side attestation gate, deliver the decode key once.
+  if (req.method === "POST" && url.pathname === "/api/key") {
+    const body = await readBody(req);
+    const r = returnKey(AUTH, body);
+    const status = r.status || 200;
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(r));
+    return;
+  }
+
+  // Legacy: register a table by sid (older round-trip mode).
+  if (url.pathname === "/api/session" && req.method === "GET") {
+    const sid = url.searchParams.get("sid");
+    const table = sid ? SESSIONS.get(sid) : undefined;
+    if (table === undefined) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "unknown session" }));
       return;
     }
-    if (req.method === "GET") {
-      const sid = url.searchParams.get("sid");
-      const table = sid ? SESSIONS.get(sid) : undefined;
-      if (table === undefined) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "unknown session" }));
-        return;
-      }
-      SESSIONS.delete(sid); // one-shot
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ table }));
-      return;
-    }
+    SESSIONS.delete(sid);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ table }));
+    return;
   }
 
   if (req.method === "GET") {

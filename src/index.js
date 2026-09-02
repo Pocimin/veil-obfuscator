@@ -59,7 +59,8 @@ export function obfuscate(source, userOptions = {}) {
     if (opts.serverDecode) opts._serverDecodeOut = sdOut;
     ast = applyStringArray(ast, opts);
     if (opts.serverDecode) {
-      // Return the extracted table + sid so the caller can register it server-side.
+      // Return the extracted sid + decode key so the caller/server can register
+      // it. The bundle ships NO key / NO plaintext.
       const gOpts = opts.compact ? { indent: "", lineEnd: "" } : {};
       return { code: generate(ast, gOpts), warnings, serverDecode: sdOut };
     }
