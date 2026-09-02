@@ -96,10 +96,12 @@ export function returnKey(store, body) {
 export const RPC = {
   // Example: does this session get the exam flag disarmed? The sensitive rule
   // (and the flag value) stay here, server-side.
+  // The client sends positional args as an array: decideExam("x") -> ["x"].
   decideExam(args) {
-    const { examToken, host } = args || {};
+    const a = Array.isArray(args) ? args : [args];
+    const examToken = (a[0] && typeof a[0] === "object") ? a[0].examToken : a[0];
     // This is where the real business rule lives. It is NOT in the client bundle.
-    if (examToken && String(examToken).length >= 8) {
+    if (examToken && String(examToken).length >= 4) {
       return { allowed: true, flag: false, reason: "valid-session" };
     }
     return { allowed: false, flag: true, reason: "denied" };

@@ -51,23 +51,29 @@ export function applyTierC(program, opts) {
     if (parent && Array.isArray(parent.body)) parent.body = parent.body.filter((s) => s !== node);
   }
 
-  // Attested RPC runtime: build a real-browser probe, POST it with the call, and
-  // use the server's decision. This whole shell is OBFUSCATED like the rest of
-  // the bundle, but contains no sensitive logic.
-  const cc = (s) => JSON.stringify(s).replace(/"/g, "");
+  // Attested RPC runtime — ASYNC + CSP-bypassing (GM_xmlhttpRequest first, then
+  // fetch, then XHR fallback). Returns a Promise resolving to the server's
+  // decision, so callers use `await _vxrpc("fn", [args])`. The shell ships no
+  // sensitive logic; only the server (RPC[fn]) decides.
   const probeSrc = buildProbeSource();
   const runtime = `
 function ${rpcName}(_fn, _a){
-  var out;
-  try {
+  return new Promise(function(_resolve, _reject){
     var F = ${probeSrc};
-    var X = new XMLHttpRequest();
-    X.open("POST", ${JSON.stringify(endpoint)}, false);
-    X.setRequestHeader("Content-Type","application/json");
-    X.send(JSON.stringify({ fn: _fn, args: _a, probeHash: F, fingerprint: "" }));
-    out = JSON.parse(X.responseText).result;
-  } catch (e) { out = null; }
-  return out;
+    var _p = JSON.stringify({ fn: _fn, args: _a, probeHash: F, fingerprint: "" });
+    function _send(_cb){
+      if (typeof GM_xmlhttpRequest === 'function') {
+        GM_xmlhttpRequest({ method:"POST", url:${JSON.stringify(endpoint)}, headers:{"Content-Type":"application/json"}, data:_p,
+          onload:function(r){ _cb(r.responseText); }, onerror:function(){ _cb(""); } });
+      } else if (typeof fetch === 'function') {
+        fetch(${JSON.stringify(endpoint)}, { method:"POST", headers:{"Content-Type":"application/json"}, body:_p })
+          .then(function(r){ return r.text(); }).then(function(t){ _cb(t); }).catch(function(){ _cb(""); });
+      } else {
+        try { var __x=new XMLHttpRequest(); __x.open("POST",${JSON.stringify(endpoint)},false); __x.setRequestHeader("Content-Type","application/json"); __x.send(_p); _cb(__x.responseText); } catch(__e){ _cb(""); }
+      }
+    }
+    _send(function(_t){ try { _resolve(JSON.parse(_t).result); } catch(__e2){ _resolve(null); } });
+  });
 }
 `;
 
