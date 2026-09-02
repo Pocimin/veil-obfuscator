@@ -1,5 +1,6 @@
 import * as walk from "acorn-walk";
 import { parse } from "../parse.js";
+import { freshName } from "./names.js";
 import {
   StringLiteral,
   Identifier,
@@ -16,9 +17,7 @@ import {
 
 let uid = 0;
 
-function randName() {
-  return "_0xdead" + ((Math.random() * 0xffffff) | 0).toString(16);
-}
+function randName() { return freshName(); }
 
 function lit(n) {
   return { type: "Literal", value: n, raw: String(n) };

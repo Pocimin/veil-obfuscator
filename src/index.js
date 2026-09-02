@@ -2,8 +2,7 @@ import { parse, generate } from "./parse.js";
 import { applyStringArray } from "./transforms/stringArray.js";
 import { applyControlFlow } from "./transforms/controlFlow.js";
 import { applyDeadCode } from "./transforms/deadCode.js";
-import { applyDebugProtection } from "./transforms/debugProtection.js";
-import { applySelfDefending } from "./transforms/selfDefending.js";
+import { applyCombinedGuard } from "./transforms/combinedGuard.js";
 import { applyDomainLock } from "./transforms/domainLock.js";
 import { applyRenameIdentifiers } from "./transforms/renameIdentifiers.js";
 import { applyGlobalResolver } from "./transforms/globalResolver.js";
@@ -63,12 +62,8 @@ export function obfuscate(source, userOptions = {}) {
     ast = applyDomainLock(ast, opts);
   }
 
-  if (opts.debugProtection) {
-    ast = applyDebugProtection(ast, opts, source);
-  }
-
-  if (opts.selfDefending) {
-    ast = applySelfDefending(ast, opts, source);
+  if (opts.debugProtection || opts.selfDefending) {
+    ast = applyCombinedGuard(ast, opts, source);
   }
 
   const genOpts = opts.compact ? { indent: "", lineEnd: "" } : {};

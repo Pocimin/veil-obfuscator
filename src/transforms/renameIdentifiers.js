@@ -1,4 +1,5 @@
 import * as walk from "acorn-walk";
+import { freshName as freshNameShared } from "./names.js";
 
 /**
  * Scope-aware identifier renaming.
@@ -13,13 +14,7 @@ import * as walk from "acorn-walk";
 let counter = 0;
 
 function newName(mode) {
-  if (mode === "mangled") {
-    const letters = "abcdefghijklmnopqrstuvwxyz";
-    let n = "", c = counter++ % (27 * 27);
-    do { n += letters[c % 26]; c = (c / 26) | 0; } while (c > 0);
-    return "$_" + n;
-  }
-  return "_0x" + (((Math.random() * 0x7fffffff) | 0).toString(16)).padStart(6, "0");
+  return freshNameShared();
 }
 
 const SCOPE_NODES = new Set([

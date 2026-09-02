@@ -21,9 +21,8 @@ const SAFE_TYPES = new Set([
 
 let uid = 0;
 
-function randName() {
-  return "_0x" + ((Math.random() * 0xffffff) | 0).toString(16);
-}
+import { freshName } from "./names.js";
+function randName() { return freshName(); }
 
 function isLinear(body) {
   if (!body || body.length < 2) return false;

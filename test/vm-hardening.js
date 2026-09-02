@@ -27,7 +27,7 @@ try {
   const { code } = obfuscate("1 + 2 * 3", { preset: "vm", vmBytecodeEncoding: false, vmStatefulOpcodes: false, vmMacroOps: false, vmSelfDefending: true });
   const file = "/tmp/vm_sd_t.js";
   fs.writeFileSync(file, code);
-  const m = code.match(/var _0xcode = (\[[^\]]*\]);/);
+  const m = code.match(/var xcode = (\[[^\]]*\]);/);
   const arr = JSON.parse(m[1]);
   arr[1] = 42;
   fs.writeFileSync(file, code.replace(m[1], JSON.stringify(arr)));
@@ -61,7 +61,7 @@ try {
 // 5. Bytecode is encrypted (no plain literal code array).
 try {
   const { code } = obfuscate("1+1", { preset: "vm", vmBytecodeEncoding: true });
-  check("vmBytecodeEncoding: blob instead of literal", /_0xdec\(/.test(code) && !/var _0xcode = \[[1-9]/.test(code));
+  check("vmBytecodeEncoding: blob instead of literal", /xdec\(/.test(code) && !/var xcode = \[[1-9]/.test(code));
 } catch (e) {
   check("vmBytecodeEncoding: blob instead of literal", false, e.message);
 }

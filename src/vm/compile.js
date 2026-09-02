@@ -275,7 +275,7 @@ function randKey() {
 }
 
 function randName() {
-  return "_0x" + ((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0");
+  return "x" + ((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0");
 }
 
 /* ------------------------------------------------------------------ */
@@ -302,7 +302,7 @@ function wrapVM(c, opts) {
   let codeExpr;
   if (useEncrypt) {
     const blob = b64FromBytes(xorCipher(serial, key));
-    codeExpr = `JSON.parse(_0xdec("${blob}", _0xkey))`;
+    codeExpr = `JSON.parse(xdec("${blob}", xkey))`;
   } else {
     codeExpr = JSON.stringify(masked);
   }
@@ -313,33 +313,33 @@ function wrapVM(c, opts) {
   // Build the switch cases (standard + macro + decoy).
   const cases = [];
   const add = (num, body) => cases.push(`case ${num}: ${body} break;`);
-  add(OP.PUSH_NUM, "_0xS.push(_0xcode[pc++]);");
-  add(OP.PUSH_BOOL, "_0xS.push(!!_0xcode[pc++]);");
-  add(OP.PUSH_STRARRAY, "_0xS.push(_0xstr[_0xcode[pc++]]);");
-  add(OP.PUSH_STR, "_0xS.push(_0xcode[pc++]);");
-  add(OP.ADD, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a+b);");
-  add(OP.SUB, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a-b);");
-  add(OP.MUL, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a*b);");
-  add(OP.DIV, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a/b);");
-  add(OP.MOD, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a%b);");
-  add(OP.EQ_STRICT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a===b);");
-  add(OP.LT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a<b);");
-  add(OP.GT, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a>b);");
-  add(OP.LAND, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a&&b);");
-  add(OP.LOR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a||b);");
-  add(OP.NOT, "a=_0xS.pop();_0xS.push(!a);");
-  add(OP.BIT_AND, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a&b);");
-  add(OP.BIT_OR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a|b);");
-  add(OP.SHL, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a<<b);");
-  add(OP.SHR, "b=_0xS.pop();a=_0xS.pop();_0xS.push(a>>b);");
-  add(OP.LOAD, "_0xS.push(_0xR[_0xcode[pc++]]);");
-  add(OP.STORE, "_0xR[_0xcode[pc++]]=_0xS.pop();");
-  add(OP.GET, "a=_0xS.pop();_0xS.push(a[_0xcode[pc++]]);");
+  add(OP.PUSH_NUM, "xS.push(xcode[pc++]);");
+  add(OP.PUSH_BOOL, "xS.push(!!xcode[pc++]);");
+  add(OP.PUSH_STRARRAY, "xS.push(xstr[xcode[pc++]]);");
+  add(OP.PUSH_STR, "xS.push(xcode[pc++]);");
+  add(OP.ADD, "b=xS.pop();a=xS.pop();xS.push(a+b);");
+  add(OP.SUB, "b=xS.pop();a=xS.pop();xS.push(a-b);");
+  add(OP.MUL, "b=xS.pop();a=xS.pop();xS.push(a*b);");
+  add(OP.DIV, "b=xS.pop();a=xS.pop();xS.push(a/b);");
+  add(OP.MOD, "b=xS.pop();a=xS.pop();xS.push(a%b);");
+  add(OP.EQ_STRICT, "b=xS.pop();a=xS.pop();xS.push(a===b);");
+  add(OP.LT, "b=xS.pop();a=xS.pop();xS.push(a<b);");
+  add(OP.GT, "b=xS.pop();a=xS.pop();xS.push(a>b);");
+  add(OP.LAND, "b=xS.pop();a=xS.pop();xS.push(a&&b);");
+  add(OP.LOR, "b=xS.pop();a=xS.pop();xS.push(a||b);");
+  add(OP.NOT, "a=xS.pop();xS.push(!a);");
+  add(OP.BIT_AND, "b=xS.pop();a=xS.pop();xS.push(a&b);");
+  add(OP.BIT_OR, "b=xS.pop();a=xS.pop();xS.push(a|b);");
+  add(OP.SHL, "b=xS.pop();a=xS.pop();xS.push(a<<b);");
+  add(OP.SHR, "b=xS.pop();a=xS.pop();xS.push(a>>b);");
+  add(OP.LOAD, "xS.push(xR[xcode[pc++]]);");
+  add(OP.STORE, "xR[xcode[pc++]]=xS.pop();");
+  add(OP.GET, "a=xS.pop();xS.push(a[xcode[pc++]]);");
 
   if (useMacro) {
-    add(MACRO.PUSH_ADD, "_0xS.push(_0xcode[pc++]+_0xcode[pc++]);");
-    add(MACRO.PUSH_SUB, "_0xS.push(_0xcode[pc++]-_0xcode[pc++]);");
-    add(MACRO.PUSH_MUL, "_0xS.push(_0xcode[pc++]*_0xcode[pc++]);");
+    add(MACRO.PUSH_ADD, "xS.push(xcode[pc++]+xcode[pc++]);");
+    add(MACRO.PUSH_SUB, "xS.push(xcode[pc++]-xcode[pc++]);");
+    add(MACRO.PUSH_MUL, "xS.push(xcode[pc++]*xcode[pc++]);");
   }
 
   // Decoy opcodes: fake handlers that never legitimately run.
@@ -347,25 +347,25 @@ function wrapVM(c, opts) {
     const decoys = [87, 176, 209, 250, 38, 145];
     for (let i = 0; i < decoys.length; i++) {
       const n = decoys[i];
-      add(n, `_0xS.push(0x${(0xdead00 + i).toString(16)});`); // garbage pushed (unreachable)
+      add(n, `xS.push(0x${(0xdead00 + i).toString(16)});`); // garbage pushed (unreachable)
     }
   }
 
   const readOp = useStateful
-    ? `var _0xi = pc; op = ((_0xcode[_0xi] ^ keyAt(_0xi)) >>> 0); pc++;`
-    : `op = _0xcode[pc++];`;
+    ? `var xi = pc; op = ((xcode[xi] ^ keyAt(xi)) >>> 0); pc++;`
+    : `op = xcode[pc++];`;
 
   const codeChecksum = fnv(masked);
   const tableChecksum = fnvStr(c.stringTable.join(""));
 
   const selfDef = opts.vmSelfDefending
     ? `
-  if (fnv(_0xcode) !== ${codeChecksum}) return _0xspin();
-  if (fnvs(_0xstr.join("")) !== ${tableChecksum}) return _0xspin();
+  if (fnv(xcode) !== ${codeChecksum}) return xspin();
+  if (fnvs(xstr.join("")) !== ${tableChecksum}) return xspin();
   try {
-    if (String(Function.prototype.toString.call(Array.prototype.pop)).indexOf('[native code]') < 0) return _0xspin();
-    if (String(Array.isArray).indexOf('isArray') < 0) return _0xspin();
-  } catch (_0xe) {}
+    if (String(Function.prototype.toString.call(Array.prototype.pop)).indexOf('[native code]') < 0) return xspin();
+    if (String(Array.isArray).indexOf('isArray') < 0) return xspin();
+  } catch (xe) {}
 `
     : "";
 
@@ -374,27 +374,27 @@ function wrapVM(c, opts) {
   const debugDef = opts.vmDebugProtection
     ? `
   try {
-    var _0xclk = (typeof performance !== 'undefined' && performance.now) ? {now:function(){return performance.now();}} : {now:function(){return Date.now();}};
-    var _0xt0 = _0xclk.now();
+    var xclk = (typeof performance !== 'undefined' && performance.now) ? {now:function(){return performance.now();}} : {now:function(){return Date.now();}};
+    var xt0 = xclk.now();
     debugger;
-    if (_0xclk.now() - _0xt0 > 100) return _0xspin();
-    var _0xt1 = _0xclk.now();
+    if (xclk.now() - xt0 > 100) return xspin();
+    var xt1 = xclk.now();
     debugger;
-    if (_0xclk.now() - _0xt1 > 100) return _0xspin();
-  } catch (_0xe) {}
+    if (xclk.now() - xt1 > 100) return xspin();
+  } catch (xe) {}
   if (typeof window !== 'undefined') {
-    var _0xw = window.outerWidth - window.innerWidth;
-    if (_0xw > 160 || (window.outerHeight - window.innerHeight) > 160) return _0xspin();
+    var xw = window.outerWidth - window.innerWidth;
+    if (xw > 160 || (window.outerHeight - window.innerHeight) > 160) return xspin();
   }
 `
     : "";
 
   const spinFn = `
-  function _0xspin(){ while (true) {} }
+  function xspin(){ while (true) {} }
 `;
 
   const b64src = `
-  function _0xdec(str,k){
+  function xdec(str,k){
     var C='${B64_STD}',b=0,bs=0,out=[];
     var clean=str.replace(/=+$/,'');
     for(var i=0;i<clean.length;i++){ var v=C.indexOf(clean[i]); if(v<0) continue;
@@ -423,7 +423,7 @@ function fnvStr(s) {
 }
 
   const tableDecode = useEncrypt
-    ? `var _0xkey = ${keyGetter};\n${b64src}`
+    ? `var xkey = ${keyGetter};\n${b64src}`
     : "";
 
   return `(function(){
@@ -431,20 +431,20 @@ ${tableDecode}
 ${keyAtSrc}
 ${fnvSrc}
 ${spinFn}
-var _0xcode = ${codeExpr};
-var _0xstr = ${table};
-var _0xR = new Array(${slots});
-var _0xS = [];
+var xcode = ${codeExpr};
+var xstr = ${table};
+var xR = new Array(${slots});
+var xS = [];
 var pc = 0, op, a, b;
 ${debugDef}
 ${selfDef}
-while (pc < _0xcode.length){
+while (pc < xcode.length){
   ${readOp}
   switch (op){
 ${cases.join("\n")}
-    default: return _0xS.pop();
+    default: return xS.pop();
   }
 }
-return _0xS.pop();
+return xS.pop();
 })();`.trim();
 }

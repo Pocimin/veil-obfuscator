@@ -10,17 +10,13 @@ import {
   obfuscateIndex,
 } from "./chainedString.js";
 import { Identifier } from "../ast.js";
+import { freshName } from "./names.js";
 
 const HEX_NAMES = "abcdef0123456789";
 const LETTERS = "abcdefghijklmnopqrstuvwxyz";
 let uid = 0;
 
-function randName() {
-  let n = "";
-  for (let i = 0; i < 6; i++) n += HEX_NAMES[(Math.random() * 16) | 0];
-  // Make it look like the classic `_0x...` pattern.
-  return "_0x" + n;
-}
+function randName() { return freshName(); }
 
 function randKey() {
   let k = "veil";

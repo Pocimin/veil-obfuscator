@@ -29,8 +29,8 @@ for (const t of SCRIPTS) {
     const logs = run(code);
     const expected = run(t.src);
     check(`rename: preserves behavior (${t.name})`, JSON.stringify(logs) === JSON.stringify(expected), JSON.stringify(logs));
-    // names should be mangled
-    const mangled = /_0x[a-f0-9]{6}/.test(code);
+    // names should be mangled (not the original source names, no _0x convention)
+    const mangled = !/function greet|const subject|\bname\b/.test(code) && !/_0x[a-f0-9]{4,}/.test(code);
     check(`rename: identifiers mangled (${t.name})`, mangled);
   } catch (e) {
     check(`rename: ${t.name}`, false, e.message);

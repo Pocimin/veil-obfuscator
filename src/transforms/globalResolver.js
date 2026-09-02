@@ -1,6 +1,7 @@
 import * as walk from "acorn-walk";
 import { parse } from "../parse.js";
 import { Identifier, NumberLiteral } from "../ast.js";
+import { freshName } from "./names.js";
 
 // Globals we resolve at runtime. Only these are routed; anything declared
 // locally, or any property/member/label identifier, is left untouched.
@@ -18,7 +19,7 @@ const GLOBALS = new Set([
 let addr = 0;
 
 function randName() {
-  return "_0xr" + ((Math.random() * 0x7fffffff) | 0).toString(16).padStart(6, "0");
+  return freshName();
 }
 
 /**

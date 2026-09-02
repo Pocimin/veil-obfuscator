@@ -51,7 +51,8 @@ export function encodeStringsChained(strings, encodings, key) {
   return out;
 }
 
-function nm(p) { return "_0x" + ((Math.random() * 0xffffff) | 0).toString(16) + String(p).slice(-2); }
+import { freshName } from "./names.js";
+function nm(p) { return freshName(); }
 
 /**
  * Emit the runtime loader for a chained array with:
@@ -73,13 +74,16 @@ export function chainedLoaderSource(ctx) {
   // EXPECTED[i])`. In a real browser probe==EXPECTED so the key is correct; in
   // Node an LLM-emulator or a shim the XOR is non-zero -> wrong key -> garbage,
   // even if the shim makes every 'typeof' check "pass".
-  const EXPECTED = [9, 1, 1, 1, 1, 1, 1, 1]; // document.nodeType, elementNodeType, MutationObserver, window.self, createElement, getElementById, documentElement.tagName, navigator.userAgent
+  // Deepened probe: beyond boolean typeof checks, sample invariants a shim
+  // rarely fakes well — canvas/WebGL API presence, devicePixelRatio, screen,
+  // querySelector. All are deterministic in a real browser, absent in Node.
+  const EXPECTED = [9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
   const expectedJson = JSON.stringify(EXPECTED);
 
   const probeSrc = hostGate
     ? `
   function ${probeV}(){
-    var b = [0,0,0,0,0,0,0,0];
+    var b = [0,0,0,0,0,0,0,0,0,0,0,0];
     try{ b[0] = document.nodeType & 0xff; }catch(e){}
     try{ b[1] = (document.documentElement && document.documentElement.nodeType) & 0xff; }catch(e){}
     try{ b[2] = (typeof MutationObserver === 'function' && typeof IntersectionObserver === 'function') ? 1 : 0; }catch(e){}
@@ -88,6 +92,10 @@ export function chainedLoaderSource(ctx) {
     try{ b[5] = (typeof document.getElementById === 'function') ? 1 : 0; }catch(e){}
     try{ b[6] = (document.documentElement && document.documentElement.tagName === 'HTML') ? 1 : 0; }catch(e){}
     try{ b[7] = (typeof navigator === 'object' && typeof navigator.userAgent === 'string') ? 1 : 0; }catch(e){}
+    try{ b[8] = (document.createElement('canvas').getContext && typeof WebGLRenderingContext === 'function') ? 1 : 0; }catch(e){}
+    try{ b[9] = (typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0) ? 1 : 0; }catch(e){}
+    try{ b[10] = (typeof screen === 'object' && screen !== null) ? 1 : 0; }catch(e){}
+    try{ b[11] = (typeof document.querySelector === 'function') ? 1 : 0; }catch(e){}
     return b;
   }
   var ${probeV}E = ${expectedJson};
@@ -95,7 +103,7 @@ export function chainedLoaderSource(ctx) {
     : "";
 
   const keyTerm = (i) =>
-    hostGate && i < 8
+    hostGate && i < EXPECTED.length
       ? `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D} + (${probeV}P[${i}] ^ ${probeV}E[${i}])) & 0xff`
       : `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`;
 

@@ -1,6 +1,8 @@
 // LZW payload encoding. The string store ships as ONE compressed blob (not an
 // array); the runtime must run a textbook LZW decompressor to materialize it.
 //
+import { freshName } from "./names.js";
+
 // Classic LZW over an 8-bit input alphabet, dictionary seeded 0..255, codes
 // from 256 up. Codes are packed as 16-bit-ish char codes (< 65536). The
 // decompressor mirrors the compressor's dictionary exactly, so the payload is
@@ -61,5 +63,5 @@ function ${fnName}(data){
 
 let uid = 0;
 export function lzwFnName() {
-  return "_0xlzw" + ((Math.random() * 0xffffff) | 0).toString(16) + (uid++);
+  return freshName();
 }
