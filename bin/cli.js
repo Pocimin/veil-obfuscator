@@ -113,7 +113,8 @@ for (let i = 0; i < args.length; i++) {
       options.hostGate = true;
       break;
     case "--server-decode":
-      options.serverDecode = args[++i];
+      // Bare flag => same-origin (/api); with a value => absolute URL.
+      options.serverDecode = args[i + 1] && !args[i + 1].startsWith("-") ? args[++i] : true;
       break;
     case "--vm-bytecode-encoding":
       options.vmBytecodeEncoding = true;

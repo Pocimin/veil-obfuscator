@@ -103,7 +103,7 @@ export function applyStringArray(program, opts) {
           fnName,
           encodings: encoderOpts,
           raw,
-          url: opts.serverDecode,
+          url: opts.serverDecode === true ? "" : opts.serverDecode, // true = same-origin /api
           sid,
           wrappers: opts.stringArrayWrappersCount ?? 3,
           fingerprint: opts.fingerprint,

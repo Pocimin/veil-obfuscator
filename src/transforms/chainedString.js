@@ -93,19 +93,20 @@ export function chainedLoaderSource(ctx) {
     ? `
   var ${G} = globalThis;
   function ${H}(a){ return ${G}[String.fromCharCode.apply(null, a)]; }
+  function __s(a){ return String.fromCharCode.apply(null, a); }
   var ${probeV} = [
     (function(){try{return (${host("document")}||{}).nodeType&0xff}catch(e){return 0}})(),
     (function(){try{return (${host("document")}.documentElement&&${host("document")}.documentElement.nodeType)&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("MutationObserver")}==='function'&&typeof ${host("IntersectionObserver")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("MutationObserver")}===__s(102,117,110,99,116,105,111,110)&&typeof ${host("IntersectionObserver")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
     (function(){try{return (typeof ${host("window")}!=='undefined'&&${host("window")}.self===${host("window")})?1:0}catch(e){return 0}})(),
-    (function(){try{return ${host("document")}.createElement&&${host("document")}.createElement('div').nodeType&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("document")}.getElementById==='function')?1:0}catch(e){return 0}})(),
-    (function(){try{return (${host("document")}.documentElement&&${host("document")}.documentElement.tagName==='HTML')?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("navigator")}==='object'&&typeof ${host("navigator")}.userAgent==='string')?1:0}catch(e){return 0}})(),
-    (function(){try{return (${host("document")}.createElement&&${host("document")}.createElement('canvas').getContext&&typeof ${host("WebGLRenderingContext")}==='function')?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("window")}.devicePixelRatio==='number'&&${host("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("screen")}==='object'&&${host("screen")}!==null)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${host("document")}.querySelector==='function')?1:0}catch(e){return 0}})()
+    (function(){try{return ${host("document")}.createElement&&${host("document")}.createElement(__s(100,105,118)).nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("document")}.getElementById===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
+    (function(){try{return (${host("document")}.documentElement&&${host("document")}.documentElement.tagName===__s(72,84,77,76))?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("navigator")}===__s(111,98,106,101,99,116)&&typeof ${host("navigator")}.userAgent===__s(115,116,114,105,110,103))?1:0}catch(e){return 0}})(),
+    (function(){try{return (${host("document")}.createElement&&${host("document")}.createElement(__s(99,97,110,118,97,115)).getContext&&typeof ${host("WebGLRenderingContext")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("window")}.devicePixelRatio===__s(110,117,109,98,101,114)&&${host("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("screen")}===__s(111,98,106,101,99,116)&&${host("screen")}!==null)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("document")}.querySelector===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})()
   ];
   var ${probeV}E = ${expectedJson};`
     : "";
@@ -301,19 +302,20 @@ export function serverKeyLoaderSource(ctx) {
   const probeArr = `
   var ${G} = globalThis;
   function ${H}(a){ return ${G}[String.fromCharCode.apply(null,a)]; }
+  function __s(a){ return String.fromCharCode.apply(null,a); }
   var ${F} = [
     (function(){try{return ((${h("document")}||{}).nodeType)&0xff}catch(e){return 0}})(),
     (function(){try{return ((${h("document")}.documentElement&&${h("document")}.documentElement.nodeType))&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("MutationObserver")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("MutationObserver")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
     (function(){try{return (typeof ${h("window")}!=='undefined'&&${h("window")}.self===${h("window")})?1:0}catch(e){return 0}})(),
-    (function(){try{return ${h("document")}.createElement&&${h("document")}.createElement('div').nodeType&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("document")}.getElementById==='function')?1:0}catch(e){return 0}})(),
-    (function(){try{return (${h("document")}.documentElement&&${h("document")}.documentElement.tagName==='HTML')?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("navigator")}==='object'&&typeof ${h("navigator")}.userAgent==='string')?1:0}catch(e){return 0}})(),
-    (function(){try{return (${h("document")}.createElement&&${h("document")}.createElement('canvas').getContext&&typeof ${h("WebGLRenderingContext")}==='function')?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("window")}.devicePixelRatio==='number'&&${h("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("screen")}==='object'&&${h("screen")}!==null)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("document")}.querySelector==='function')?1:0}catch(e){return 0}})()
+    (function(){try{return ${h("document")}.createElement&&${h("document")}.createElement(__s(100,105,118)).nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.getElementById===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.documentElement&&${h("document")}.documentElement.tagName===__s(72,84,77,76))?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("navigator")}===__s(111,98,106,101,99,116)&&typeof ${h("navigator")}.userAgent===__s(115,116,114,105,110,103))?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.createElement&&${h("document")}.createElement(__s(99,97,110,118,97,115)).getContext&&typeof ${h("WebGLRenderingContext")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("window")}.devicePixelRatio===__s(110,117,109,98,101,114)&&${h("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("screen")}===__s(111,98,106,101,99,116)&&${h("screen")}!==null)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.querySelector===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})()
   ];`;
 
   // Handshake: register the session, get a token, attest, receive the key once.
