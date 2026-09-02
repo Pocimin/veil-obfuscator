@@ -154,19 +154,24 @@ const server = createServer(async (req, res) => {
   // the server decides. The sensitive rule/flag/secret never ships to the client.
   if (req.method === "POST" && url.pathname === "/api/rpc") {
     const body = await readBody(req);
-    if (probeScore(body.probeHash) < 8) {
+    const score = probeScore(body.probeHash);
+    if (score < 2) {
+      console.log(`[rpc] ${clientIp(req)} fn=${body.fn} probeScore=${score}/12 -> 403 attestation failed`);
       res.writeHead(403, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "attestation failed" }));
       return;
     }
     const handler = RPC[body.fn];
     if (!handler) {
+      console.log(`[rpc] ${clientIp(req)} fn=${body.fn} -> 404 unknown rpc`);
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "unknown rpc" }));
       return;
     }
+    const result = handler(body.args);
+    console.log(`[rpc] ${clientIp(req)} fn=${body.fn} probeScore=${score}/12 -> ${JSON.stringify(result)}`);
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ result: handler(body.args) }));
+    res.end(JSON.stringify({ result }));
     return;
   }
 
