@@ -264,17 +264,25 @@ var ${arrayName} = (function(){
  * is only delivered after a server-validated one-time session (HMAC token +
  * server-side attestation). A static dump or shimmed browser gets nothing.
  */
+/**
+ * Tier A (CSP-bypassing): ship the ENCRYPTED pool + an ASYNC loader that fetches
+ * the decode key out-of-band via Tampermonkey's GM_xmlhttpRequest (or fetch), so
+ * it is NOT subject to the page's connect-src CSP (e.g. YouTube). The key is
+ * stored in a module var the decoder reads lazily; the program is gated (in
+ * obfuscate()) to run only after the key arrives.
+ */
 export function serverKeyLoaderSource(ctx) {
   const { arrayName, fnName, encodings, raw, url, sid, wrappers, fingerprint } = ctx;
-  const N = raw.length;
-  const keyV = nm(1), poolV = nm(2), chainV = nm(3), boxV = nm(4);
-  const fx = nm(5), rc = nm(6), b64 = nm(7), fnv = nm(8), prg = nm(9);
-  const X = nm(10), T = nm(11), K = nm(12), F = nm(13), FP = nm(14), R = nm(15);
+  const K0 = nm(60);            // module-level decode key (set async)
+  const fx = nm(5), poolV = nm(2), chainV = nm(3), boxV = nm(4);
+  const rc = nm(9), b64 = nm(10), fnv = nm(11), prg = nm(12);
+  const H = nm(16), G = nm(17);
+  const FT = nm(70), ST = nm(71);
 
   const steps = [];
   for (const enc of [...encodings].reverse()) {
     if (enc === "base64") steps.push(`w=${b64}(w);`);
-    else if (enc === "rc4") steps.push(`w=${rc}(w,${keyV});`);
+    else if (enc === "rc4") steps.push(`w=${rc}(w,${K0});`);
   }
   const decodeSteps = steps.length ? steps.join("\n") : "";
 
@@ -297,10 +305,10 @@ export function serverKeyLoaderSource(ctx) {
   function ${prg}(seed,len){ var s=seed>>>0||1; var o=[]; for(var i=0;i<len;i++){ s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;o.push(s&255); } return o; }
   function ${fnv}(s){ var h=0x811c9dc5; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }`;
 
-  // Inline real-browser probe (hidden host lookups) to report for attestation.
   const cc = (s) => "[" + [...s].map((c) => c.charCodeAt(0)).join(",") + "]";
-  const H = nm(16), G = nm(17);
-  const h = (s) => `${H}(${cc(s)})`;
+  const h = (name) => `${H}(${cc(name)})`;
+  const F = "__p__" + ((Math.random() * 0xffffff) | 0).toString(16);
+  const s_ = (x) => `__s(${cc(x)})`;
   const probeArr = `
   var ${G} = globalThis;
   function ${H}(a){ return ${G}[String.fromCharCode.apply(null,a)]; }
@@ -308,41 +316,19 @@ export function serverKeyLoaderSource(ctx) {
   var ${F} = [
     (function(){try{return ((${h("document")}||{}).nodeType)&0xff}catch(e){return 0}})(),
     (function(){try{return ((${h("document")}.documentElement&&${h("document")}.documentElement.nodeType))&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("MutationObserver")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("window")}!=='undefined'&&${h("window")}.self===${h("window")})?1:0}catch(e){return 0}})(),
-    (function(){try{return ${h("document")}.createElement&&${h("document")}.createElement(__s(100,105,118)).nodeType&0xff}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("document")}.getElementById===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
-    (function(){try{return (${h("document")}.documentElement&&${h("document")}.documentElement.tagName===__s(72,84,77,76))?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("navigator")}===__s(111,98,106,101,99,116)&&typeof ${h("navigator")}.userAgent===__s(115,116,114,105,110,103))?1:0}catch(e){return 0}})(),
-    (function(){try{return (${h("document")}.createElement&&${h("document")}.createElement(__s(99,97,110,118,97,115)).getContext&&typeof ${h("WebGLRenderingContext")}===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("window")}.devicePixelRatio===__s(110,117,109,98,101,114)&&${h("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("screen")}===__s(111,98,106,101,99,116)&&${h("screen")}!==null)?1:0}catch(e){return 0}})(),
-    (function(){try{return (typeof ${h("document")}.querySelector===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})()
+    (function(){try{return (typeof ${h("MutationObserver")}===${s_("function")})?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("window")}!=="undefined"&&${h("window")}.self===${h("window")})?1:0}catch(e){return 0}})(),
+    (function(){try{return ${h("document")}.createElement&&${h("document")}.createElement(${s_("div")}).nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.getElementById===${s_("function")})?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.documentElement&&${h("document")}.documentElement.tagName===${s_("HTML")})?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("navigator")}===${s_("object")}&&typeof ${h("navigator")}.userAgent===${s_("string")})?1:0}catch(e){return 0}})(),
+    (function(){try{return (${h("document")}.createElement&&${h("document")}.createElement(${s_("canvas")}).getContext&&typeof ${h("WebGLRenderingContext")}===${s_("function")})?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("window")}.devicePixelRatio===${s_("number")}&&${h("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("screen")}===${s_("object")}&&${h("screen")}!==null)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${h("document")}.querySelector===${s_("function")})?1:0}catch(e){return 0}})()
   ];`;
 
-  // Handshake, retried so a re-run (script injected twice / SPA re-exec) doesn't
-  // lose the key when the one-time token is consumed. On failure, grab a fresh
-  // token and re-attest (up to N tries).
-  const handshake = `
-  var ${K} = "";
-  for (var ${X}t = 0; ${X}t < 4 && !${K}; ${X}t++) {
-    try {
-      var ${FP} = ${JSON.stringify(fingerprint || "veil-" + sid.slice(0, 6))};
-      var ${X} = new XMLHttpRequest();
-      ${X}.open("POST", ${JSON.stringify(url)} + "/api/session", false); ${X}.setRequestHeader("Content-Type","application/json");
-      ${X}.send(JSON.stringify({ sid: ${JSON.stringify(sid)}, fingerprint: ${FP} }));
-      var ${T} = JSON.parse(${X}.responseText);
-      if (!${T}.sid) continue;
-      var ${X} = new XMLHttpRequest();
-      ${X}.open("POST", ${JSON.stringify(url)} + "/api/key", false); ${X}.setRequestHeader("Content-Type","application/json");
-      ${X}.send(JSON.stringify({ sid: ${T}.sid, nonce: ${T}.nonce, sig: ${T}.sig, fingerprint: ${FP}, probeHash: ${F} }));
-      var ${R} = JSON.parse(${X}.responseText);
-      ${K} = ${R}.key || "";
-    } catch (e) {}
-  }`;
-
   const poolDef = `  var ${poolV} = ${JSON.stringify(raw)};`;
-
   const dy = `
   function ${fx}(i){
     if (${boxV}[i] !== undefined) return ${boxV}[i];
@@ -364,20 +350,52 @@ ${decodeSteps}
   const wrappersSrc = [];
   let inner = `${arrayName}(_i)`;
   for (let i = 0; i < wrapN - 1; i++) { const wn = nm(20 + i); wrappersSrc.push(`function ${wn}(_i){ return ${inner}; }`); inner = `${wn}(_i)`; }
+  const accessor = `function ${fnName}(_i){ return ${inner}; }`;
+
+  // Async CSP-bypassing key fetch: GM_xmlhttpRequest (Tampermonkey) first, else
+  // fetch, else fallback sync XHR. Calls done(KEY) once; not synchronous.
+  const fetchSrc = `
+function ${FT}(_u, _p, _cb){
+  if (typeof GM_xmlhttpRequest === 'function') {
+    GM_xmlhttpRequest({ method:"POST", url:_u, headers:{"Content-Type":"application/json"}, data:_p,
+      onload:function(r){ _cb(r.responseText); }, onerror:function(){ _cb(""); } });
+  } else if (typeof fetch === 'function') {
+    fetch(_u, { method:"POST", headers:{"Content-Type":"application/json"}, body:_p })
+      .then(function(r){ return r.text(); }).then(function(t){ _cb(t); }).catch(function(){ _cb(""); });
+  } else {
+    try { var __x=new XMLHttpRequest(); __x.open("POST",_u,false); __x.setRequestHeader("Content-Type","application/json"); __x.send(_p); _cb(__x.responseText); } catch(__e){ _cb(""); }
+  }
+}
+function ${ST}(done){
+  var __sid=${JSON.stringify(sid)}, __url=${JSON.stringify(url)}, __fp=${JSON.stringify(fingerprint || ("veil-" + sid.slice(0, 6)))};
+  function attempt(n){
+    if (n<=0) { ${K0}=""; return done(""); }
+    ${FT}(__url + "/api/session", JSON.stringify({ sid: __sid, fingerprint: __fp }), function(_t){
+      var tok; try { tok = JSON.parse(_t); } catch(__err){ return attempt(n-1); }
+      if (!tok || !tok.sid) return attempt(n-1);
+      ${FT}(__url + "/api/key", JSON.stringify({ sid: tok.sid, nonce: tok.nonce, sig: tok.sig, fingerprint: __fp, probeHash: ${F} }), function(_k){
+        var r; try { r = JSON.parse(_k); } catch(__err2){ return attempt(n-1); }
+        ${K0} = r.key || ""; done(${K0});
+      });
+    });
+  }
+  attempt(4);
+}`;
 
   return `
+var ${K0} = "";
+${probeArr}
 var ${arrayName} = (function(){
 ${prims}
-${probeArr}
-${handshake}
 ${poolDef}
 ${dy}
-  var ${keyV} = ${K};
   var ${chainV} = 0x811c9dc5;
   var ${boxV} = [];
   return function(_i){ return ${fx}(_i); };
 })();
 ${wrappersSrc.join("\n")}
-function ${fnName}(_i){ return ${inner}; }
+${accessor}
+${fetchSrc}
+var __veilFetch = ${ST};
 `;
 }

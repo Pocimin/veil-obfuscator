@@ -65,6 +65,31 @@ export function obfuscate(source, userOptions = {}) {
     if (opts.serverDecode) opts._serverDecodeOut = sdOut;
     ast = applyStringArray(ast, opts);
     if (opts.serverDecode) {
+      // Gate the user program behind the async key fetch: the loader emits
+      // `__veilFetch`, so wrap the user statements in __veilUser and call it only
+      // once the key is delivered. This is what makes it CSP-bypassing (async
+      // GM_xmlhttpRequest) and runnable on strict-CSP pages like YouTube.
+      const loaderLen = opts._serverLoaderLen || 0;
+      const userStmts = ast.body.slice(loaderLen);
+      ast.body = ast.body.slice(0, loaderLen);
+      const userName = "__veilUser";
+      ast.body.push({
+        type: "FunctionDeclaration",
+        id: { type: "Identifier", name: userName },
+        params: [],
+        body: { type: "BlockStatement", body: userStmts },
+        generator: false,
+        async: false,
+      });
+      ast.body.push({
+        type: "ExpressionStatement",
+        expression: {
+          type: "CallExpression",
+          callee: { type: "Identifier", name: "__veilFetch" },
+          arguments: [{ type: "Identifier", name: userName }],
+          optional: false,
+        },
+      });
       // Return the extracted sid + decode key so the caller/server can register
       // it. The bundle ships NO key / NO plaintext.
       const gOpts = opts.compact ? { indent: "", lineEnd: "" } : {};

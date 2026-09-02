@@ -136,6 +136,9 @@ export function applyStringArray(program, opts) {
 
   // Prepend the decoder statements to the program body.
   program.body = [...decoderAst.body, ...program.body];
+  // Record how many statements are the Tier A loader so obfuscate() can gate the
+  // user program behind the async key fetch (runs only after the key arrives).
+  if (opts.serverDecode) opts._serverLoaderLen = decoderAst.body.length;
   uid++;
 
   // Replace string literals with resolver calls passing an OBFUSCATED index
