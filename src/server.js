@@ -131,6 +131,7 @@ const server = createServer(async (req, res) => {
     const body = await readBody(req);
     const r = issueToken(AUTH, clientIp(req), body.sid, body.fingerprint);
     const status = r.status || 200;
+    console.log(`[session] ${clientIp(req)} sid=${body.sid} -> ${status} ${r.error || "ok"}`);
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(r));
     return;
@@ -141,6 +142,8 @@ const server = createServer(async (req, res) => {
     const body = await readBody(req);
     const r = returnKey(AUTH, body);
     const status = r.status || 200;
+    const score = probeScore(body.probeHash);
+    console.log(`[key] ${clientIp(req)} sid=${body.sid} nonce=${(body.nonce || "").slice(0, 4)} probeScore=${score}/12 -> ${status} ${r.error || "ok"}`);
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(r));
     return;

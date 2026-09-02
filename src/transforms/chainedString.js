@@ -318,21 +318,26 @@ export function serverKeyLoaderSource(ctx) {
     (function(){try{return (typeof ${h("document")}.querySelector===__s(102,117,110,99,116,105,111,110))?1:0}catch(e){return 0}})()
   ];`;
 
-  // Handshake: register the session, get a token, attest, receive the key once.
+  // Handshake, retried so a re-run (script injected twice / SPA re-exec) doesn't
+  // lose the key when the one-time token is consumed. On failure, grab a fresh
+  // token and re-attest (up to N tries).
   const handshake = `
-  var ${K} = null;
-  try {
-    var ${FP} = ${JSON.stringify(fingerprint || "veil-" + sid.slice(0, 6))};
-    var ${X} = new XMLHttpRequest();
-    ${X}.open("POST", ${JSON.stringify(url)} + "/api/session", false); ${X}.setRequestHeader("Content-Type","application/json");
-    ${X}.send(JSON.stringify({ sid: ${JSON.stringify(sid)}, fingerprint: ${FP} }));
-    var ${T} = JSON.parse(${X}.responseText);
-    var ${X} = new XMLHttpRequest();
-    ${X}.open("POST", ${JSON.stringify(url)} + "/api/key", false); ${X}.setRequestHeader("Content-Type","application/json");
-    ${X}.send(JSON.stringify({ sid: ${T}.sid, nonce: ${T}.nonce, sig: ${T}.sig, fingerprint: ${FP}, probeHash: ${F} }));
-    var ${R} = JSON.parse(${X}.responseText);
-    ${K} = ${R}.key;
-  } catch (e) { ${K} = ""; }`;
+  var ${K} = "";
+  for (var ${X}t = 0; ${X}t < 4 && !${K}; ${X}t++) {
+    try {
+      var ${FP} = ${JSON.stringify(fingerprint || "veil-" + sid.slice(0, 6))};
+      var ${X} = new XMLHttpRequest();
+      ${X}.open("POST", ${JSON.stringify(url)} + "/api/session", false); ${X}.setRequestHeader("Content-Type","application/json");
+      ${X}.send(JSON.stringify({ sid: ${JSON.stringify(sid)}, fingerprint: ${FP} }));
+      var ${T} = JSON.parse(${X}.responseText);
+      if (!${T}.sid) continue;
+      var ${X} = new XMLHttpRequest();
+      ${X}.open("POST", ${JSON.stringify(url)} + "/api/key", false); ${X}.setRequestHeader("Content-Type","application/json");
+      ${X}.send(JSON.stringify({ sid: ${T}.sid, nonce: ${T}.nonce, sig: ${T}.sig, fingerprint: ${FP}, probeHash: ${F} }));
+      var ${R} = JSON.parse(${X}.responseText);
+      ${K} = ${R}.key || "";
+    } catch (e) {}
+  }`;
 
   const poolDef = `  var ${poolV} = ${JSON.stringify(raw)};`;
 
