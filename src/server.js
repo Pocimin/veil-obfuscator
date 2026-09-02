@@ -17,6 +17,16 @@ function clientIp(req) {
   return (req.socket?.remoteAddress || req.headers["x-forwarded-for"] || "0.0.0.0").split(",")[0].trim();
 }
 
+// Single source of truth for the server's public URL. Set VEIL_PUBLIC_URL once
+// (e.g. http://132.243.242.236:3000 or behind your domain); otherwise derive it
+// from the request host. Every obfuscated bundle auto-fills this — no per-bundle
+// hardcoding.
+function serverBase(req) {
+  const fromEnv = process.env.VEIL_PUBLIC_URL;
+  if (fromEnv) return fromEnv.replace(/\/+$/, "");
+  return "http://" + (req.headers.host || "localhost");
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -75,8 +85,14 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       if (typeof body.source !== "string") throw new Error("body.source is required");
       const opts = body.options || {};
-      // Tier A: build with an explicit random decode key, register it server-side
-      // under the baked sid, and return a bundle the loader keys off the server.
+      // Auto-fill the server URL from the single config (VEIL_PUBLIC_URL / host),
+      // so bundles never hardcode it. `true` / "auto" => this server.
+      const base = serverBase(req);
+      if (opts.serverDecode === true || opts.serverDecode === "auto") opts.serverDecode = base;
+      if (opts.tierC) {
+        const ep = opts.tierC.endpoint;
+        if (ep === true || ep === "auto" || ep === "" || ep === "/api/rpc") opts.tierC.endpoint = base + "/api/rpc";
+      }
       if (opts.serverDecode) {
         const { randomBytes } = await import("node:crypto");
         const K = randomBytes(16).toString("hex");
@@ -103,6 +119,13 @@ const server = createServer(async (req, res) => {
   // The obfuscator's serverDecode loader fetches the table by sid at runtime,
   // so the client bundle ships NO pool and NO decoder. Gate `sid` per session in
   // production (token/host); here it is an unguessable random id.
+  // Config discovery: the single source of truth for the server URL.
+  if (req.method === "GET" && url.pathname === "/api/config") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ serverUrl: serverBase(req), endpoints: { session: "/api/session", key: "/api/key", rpc: "/api/rpc" } }));
+    return;
+  }
+
   // Tier A: issue an HMAC, nonce-bound, one-time, expiring session token.
   if (req.method === "POST" && url.pathname === "/api/session") {
     const body = await readBody(req);
