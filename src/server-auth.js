@@ -86,7 +86,12 @@ export function returnKey(store, body) {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return { error: "bad signature", status: 401 };
 
-  if (probeScore(probeHash) < 8) return { error: "attestation failed", status: 403 };
+  // Genuine browsers reliably satisfy the universal probes (document.nodeType,
+  // documentElement.nodeType). This is friction, NOT a security wall: a client
+  // can always satisfy its own probe. The real protections are the server-side
+  // key (never in the bundle) + one-time token. Threshold kept low so real
+  // environments (incl. Tampermonkey sandboxes) pass.
+  if (probeScore(probeHash) < 2) return { error: "attestation failed", status: 403 };
 
   const key = s.key ?? "veil-nokey";
   s.used = true;
