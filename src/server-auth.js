@@ -41,32 +41,26 @@ export function probeScore(probe) {
   return score;
 }
 
-// Register a session store entry keyed by `sid` (called by /api/obfuscate which
-// baked `sid` into the bundle and holds the decode key).
-export function registerSession(store, sid, key, fingerprint) {
-  store.sessions.set(sid, { nonce: "", exp: Date.now() + TTL_MS, fp: fingerprint || "", used: false, key });
+// The decode key is DERIVED from the sid (HMAC of a stable secret), not stored.
+// So a baked sid works forever and survives server restarts — no in-memory
+// registration, no TTL on the sid itself (only the one-time token is short-lived).
+export function keyFor(sid) {
+  return createHmac("sha256", SECRET).update("veil-key:" + sid).digest("hex");
 }
 
-// Issue a one-time, nonce-bound, expiring, HMAC-signed token for an existing sid.
+// Issue a one-time, nonce-bound, expiring, HMAC-signed token. Works for ANY
+// baked sid (no pre-registration needed); only the token state is held in memory.
 export function issueToken(store, ip, sid, fingerprint) {
   const win = store.rate.get(ip) ?? 0;
   if (win >= MAX_TOKENS_PER_IP) return { error: "rate limited", status: 429 };
   store.rate.set(ip, win + 1);
 
-  const s = store.sessions.get(sid);
-  if (!s) return { error: "unknown session", status: 404 };
   const nonce = randomBytes(16).toString("hex");
   const exp = Date.now() + TTL_MS;
-  s.nonce = nonce;
-  s.exp = exp;
-  if (fingerprint) s.fp = fingerprint;
+  const s = { nonce, exp, fp: fingerprint || "", used: false };
+  store.sessions.set(sid, s);
   const payload = `${sid}:${nonce}:${exp}:${s.fp}`;
   return { sid, nonce, exp, sig: hmac(payload) };
-}
-
-export function storeKey(store, sid, key) {
-  const s = store.sessions.get(sid);
-  if (s) s.key = key;
 }
 
 export function returnKey(store, body) {
@@ -93,9 +87,8 @@ export function returnKey(store, body) {
   // environments (incl. Tampermonkey sandboxes) pass.
   if (probeScore(probeHash) < 2) return { error: "attestation failed", status: 403 };
 
-  const key = s.key ?? "veil-nokey";
   s.used = true;
-  return { key };
+  return { key: keyFor(sid) };
 }
 
 // Tier C: server-owned logic registry. The client only ever sees the RPC shell;

@@ -90,7 +90,7 @@ export function applyStringArray(program, opts) {
     ? (() => {
         // Tier A: ship the ENCRYPTED pool; the decode key comes from the server
         // (HMAC one-time token + server-side attestation). No key/plaintext ships.
-        const sid = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 20);
+        const sid = opts._serverSid || (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 20);
         const K = opts._decodeKey || deriveKey(n, R); // server flow always supplies _decodeKey
         const raw = encodeStringsChained([...pool.keys()], encoderOpts, K);
         if (opts._serverDecodeOut) {

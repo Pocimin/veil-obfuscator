@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { obfuscate } from "./index.js";
-import { createSessionStore, issueToken, returnKey, registerSession, probeScore, RPC } from "./server-auth.js";
+import { createSessionStore, issueToken, returnKey, keyFor, probeScore, RPC } from "./server-auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
@@ -94,13 +94,14 @@ const server = createServer(async (req, res) => {
         if (ep === true || ep === "auto" || ep === "" || ep === "/api/rpc") opts.tierC.endpoint = base + "/api/rpc";
       }
       if (opts.serverDecode) {
-        const { randomBytes } = await import("node:crypto");
-        const K = randomBytes(16).toString("hex");
-        opts._decodeKey = K;
+        // Derive the decode key from a sid; keyFor(sid) is reproduced at /api/key,
+        // so the bundle works forever (no in-memory session, survives restarts).
+        const sid = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 20);
+        opts._serverSid = sid;
+        opts._decodeKey = keyFor(sid);
       }
       const result = obfuscate(body.source, opts);
       if (opts.serverDecode && result.serverDecode) {
-        registerSession(AUTH, result.serverDecode.sid, opts._decodeKey, body.fingerprint);
         delete result.serverDecode.table;
         delete result.serverDecode.key;
       }
