@@ -80,31 +80,39 @@ export function chainedLoaderSource(ctx) {
   const EXPECTED = [9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
   const expectedJson = JSON.stringify(EXPECTED);
 
+  // Host identifiers are hidden behind char-code globalThis lookups (no literal
+  // document/window/navigator) and the probe is INLINED (a small helper `H` +
+  // one guarded accessor `G`), so there is no recognizable `function(){ try{
+  // document.nodeType } }` probe routine to spot.
+  const H = nm(40);       // host lookup: H([char codes]) -> global, via G
+  const G = nm(41);       // globalThis root
+  const cc = (s) => "[" + [...s].map((c) => c.charCodeAt(0)).join(",") + "]";
+  const host = (name) => `${H}(${cc(name)})`;
+
   const probeSrc = hostGate
     ? `
-  function ${probeV}(){
-    var b = [0,0,0,0,0,0,0,0,0,0,0,0];
-    try{ b[0] = document.nodeType & 0xff; }catch(e){}
-    try{ b[1] = (document.documentElement && document.documentElement.nodeType) & 0xff; }catch(e){}
-    try{ b[2] = (typeof MutationObserver === 'function' && typeof IntersectionObserver === 'function') ? 1 : 0; }catch(e){}
-    try{ b[3] = (typeof window !== 'undefined' && window.self === window) ? 1 : 0; }catch(e){}
-    try{ b[4] = document.createElement('div').nodeType & 0xff; }catch(e){}
-    try{ b[5] = (typeof document.getElementById === 'function') ? 1 : 0; }catch(e){}
-    try{ b[6] = (document.documentElement && document.documentElement.tagName === 'HTML') ? 1 : 0; }catch(e){}
-    try{ b[7] = (typeof navigator === 'object' && typeof navigator.userAgent === 'string') ? 1 : 0; }catch(e){}
-    try{ b[8] = (document.createElement('canvas').getContext && typeof WebGLRenderingContext === 'function') ? 1 : 0; }catch(e){}
-    try{ b[9] = (typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0) ? 1 : 0; }catch(e){}
-    try{ b[10] = (typeof screen === 'object' && screen !== null) ? 1 : 0; }catch(e){}
-    try{ b[11] = (typeof document.querySelector === 'function') ? 1 : 0; }catch(e){}
-    return b;
-  }
-  var ${probeV}E = ${expectedJson};
-  var ${probeV}P = ${probeV}();`
+  var ${G} = globalThis;
+  function ${H}(a){ return ${G}[String.fromCharCode.apply(null, a)]; }
+  var ${probeV} = [
+    (function(){try{return (${host("document")}||{}).nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (${host("document")}.documentElement&&${host("document")}.documentElement.nodeType)&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("MutationObserver")}==='function'&&typeof ${host("IntersectionObserver")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("window")}!=='undefined'&&${host("window")}.self===${host("window")})?1:0}catch(e){return 0}})(),
+    (function(){try{return ${host("document")}.createElement&&${host("document")}.createElement('div').nodeType&0xff}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("document")}.getElementById==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (${host("document")}.documentElement&&${host("document")}.documentElement.tagName==='HTML')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("navigator")}==='object'&&typeof ${host("navigator")}.userAgent==='string')?1:0}catch(e){return 0}})(),
+    (function(){try{return (${host("document")}.createElement&&${host("document")}.createElement('canvas').getContext&&typeof ${host("WebGLRenderingContext")}==='function')?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("window")}.devicePixelRatio==='number'&&${host("window")}.devicePixelRatio>0)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("screen")}==='object'&&${host("screen")}!==null)?1:0}catch(e){return 0}})(),
+    (function(){try{return (typeof ${host("document")}.querySelector==='function')?1:0}catch(e){return 0}})()
+  ];
+  var ${probeV}E = ${expectedJson};`
     : "";
 
   const keyTerm = (i) =>
     hostGate && i < EXPECTED.length
-      ? `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D} + (${probeV}P[${i}] ^ ${probeV}E[${i}])) & 0xff`
+      ? `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D} + (${probeV}[${i}] ^ ${probeV}E[${i}])) & 0xff`
       : `(${poolV}.length * ${K_A} + ${rotV} * ${K_B} + ${i} * ${K_C} + ${K_D}) & 0xff`;
 
   const rotDef = `
