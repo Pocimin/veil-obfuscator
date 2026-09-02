@@ -55,7 +55,14 @@ export function obfuscate(source, userOptions = {}) {
   }
 
   if (opts.stringArray) {
+    const sdOut = {};
+    if (opts.serverDecode) opts._serverDecodeOut = sdOut;
     ast = applyStringArray(ast, opts);
+    if (opts.serverDecode) {
+      // Return the extracted table + sid so the caller can register it server-side.
+      const gOpts = opts.compact ? { indent: "", lineEnd: "" } : {};
+      return { code: generate(ast, gOpts), warnings, serverDecode: sdOut };
+    }
   }
 
   if (opts.domainLock && opts.domainLock.length > 0) {

@@ -87,12 +87,20 @@ export function applyStringArray(program, opts) {
     : [...pool.keys()].map((s) => encodeString(s, encoderOpts, key));
 
   const decoderSource = opts.serverDecode
-    ? serverDecodeLoaderSource({
-        arrayName,
-        fnName,
-        url: opts.serverDecode,
-        wrappers: opts.stringArrayWrappersCount ?? 3,
-      })
+    ? (() => {
+        const sid = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 20);
+        // Expose the extracted table + sid so the caller can register it with the
+        // server (build-time upload); the loader fetches by this sid at runtime.
+        if (opts._serverDecodeOut) opts._serverDecodeOut.sid = sid;
+        if (opts._serverDecodeOut) opts._serverDecodeOut.table = [...pool.keys()];
+        return serverDecodeLoaderSource({
+          arrayName,
+          fnName,
+          url: opts.serverDecode,
+          wrappers: opts.stringArrayWrappersCount ?? 3,
+          sid,
+        });
+      })()
     : useChain
     ? chainedLoaderSource({
         arrayName,

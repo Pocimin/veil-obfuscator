@@ -8,6 +8,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "..", "public");
 const PORT = Number(process.env.PORT) || 3000;
 
+// In-memory session table store for /api/session (server round-trip).
+const SESSIONS = new Map();
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -53,7 +56,15 @@ const server = createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       if (typeof body.source !== "string") throw new Error("body.source is required");
-      const result = obfuscate(body.source, body.options || {});
+      const opts = body.options || {};
+      const result = obfuscate(body.source, opts);
+      // Self-contained server round-trip: store the string table here so the
+      // returned bundle fetches it per-session (no strings shipped to the client).
+      if (opts.serverDecode && result.serverDecode) {
+        // Store the string table server-side; do NOT echo it back to the caller.
+        SESSIONS.set(result.serverDecode.sid, result.serverDecode.table);
+        delete result.serverDecode.table;
+      }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
     } catch (e) {
@@ -63,13 +74,36 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Session string table for serverDecode mode. In a real deployment this would
-  // be gated per authenticated session; here it serves a placeholder table so
-  // the round-trip client loader can be exercised.
-  if (req.method === "GET" && url.pathname === "/api/session") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ table: ["session", "server", "decoded", "strings"] }));
-    return;
+  // Session string table for serverDecode mode (the server-round-trip):
+  //   POST /api/session { table:[...] } -> { sid }   (register a table)
+  //   GET  /api/session?sid=...          -> { table } (fetch, one-shot delete)
+  // The obfuscator's serverDecode loader fetches the table by sid at runtime,
+  // so the client bundle ships NO pool and NO decoder. Gate `sid` per session in
+  // production (token/host); here it is an unguessable random id.
+  if (url.pathname === "/api/session") {
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      // Accept a caller-supplied sid (from obfuscate's serverDecode) so the
+      // loader's baked sid matches; otherwise generate one.
+      const sid = body.sid || (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+      SESSIONS.set(sid, body.table || []);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ sid }));
+      return;
+    }
+    if (req.method === "GET") {
+      const sid = url.searchParams.get("sid");
+      const table = sid ? SESSIONS.get(sid) : undefined;
+      if (table === undefined) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "unknown session" }));
+        return;
+      }
+      SESSIONS.delete(sid); // one-shot
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ table }));
+      return;
+    }
   }
 
   if (req.method === "GET") {

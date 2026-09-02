@@ -223,7 +223,7 @@ export function obfuscateIndex(i) {
  * URL sits in the bundle. The server must gate/return the table per session.
  */
 export function serverDecodeLoaderSource(ctx) {
-  const { arrayName, fnName, url, wrappers } = ctx;
+  const { arrayName, fnName, url, wrappers, sid } = ctx;
   const tv = nm(50), rv = nm(51);
   const wrapN = Math.max(1, wrappers || 3);
 
@@ -232,7 +232,7 @@ var ${arrayName} = (function(){
   var ${tv} = null;
   try {
     var ${rv} = new XMLHttpRequest();
-    ${rv}.open("GET", ${JSON.stringify(url)} + "?sid=" + Math.random().toString(36).slice(2), false);
+    ${rv}.open("GET", ${JSON.stringify(url)} + "?sid=" + ${JSON.stringify(sid)}, false);
     ${rv}.send();
     ${tv} = JSON.parse(${rv}.responseText).table;
   } catch (e) { ${tv} = { table: [] }; }
