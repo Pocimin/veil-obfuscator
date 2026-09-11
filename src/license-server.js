@@ -25,7 +25,10 @@ import { dirname, join } from "node:path";
 const PORT = Number(process.env.LIC_PORT) || 8095;
 const DB_DIR = process.env.LIC_DIR || "/root/license";
 const DB_FILE = join(DB_DIR, "db.json");
-const KEYED_SCRIPT_PATH = join(DB_DIR, "patch.seb.run"); // gated, obfuscated script
+const KEYED_SCRIPT_PATH = join(DB_DIR, "patch.seb.run"); // gated, obfuscated runtime blob
+const BOOT_SCRIPT_PATH = join(DB_DIR, "patch.boot");    // ungated prompt+verify launcher
+const ADMIN_TOKEN = process.env.LIC_ADMIN_TOKEN || "";  // set me! master key for issuing
+const requireKey = (t) => (ADMIN_TOKEN && t === ADMIN_TOKEN);
 
 function load() {
   try { return existsSync(DB_FILE) ? JSON.parse(readFileSync(DB_FILE, "utf8")) : {}; }
@@ -81,24 +84,54 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/ping") return json(res, 200, { ok: true });
 
-  // Gated script fetch: only a valid (issued, not-expired) key may download it.
-  // Serves the OBFUSCATED build at KEYED_SCRIPT_PATH with the key injected, so a
-  // wrong/no key -> 403 (random curlers see nothing), and even a licensee gets a
-  // mangled version.
+  // Boot launcher (UNgated): only the tiny prompt+verify shim — no bypass logic,
+// so anyone can fetch it; the real code comes from /api/fetch-code with a valid key.
   if (req.method === "GET" && url.pathname === "/api/fetch") {
+    try {
+      res.writeHead(200, { "Content-Type": "text/x-shellscript", "Cache-Control": "no-store" });
+      res.end(readFileSync(BOOT_SCRIPT_PATH, "utf8"));
+    } catch {
+      json(res, 500, { ok: false, reason: "boot not configured" });
+    }
+    return;
+  }
+
+  // Gated runtime: only a valid, HWID-matching, non-expired key may fetch it.
+  if (req.method === "GET" && url.pathname === "/api/fetch-code") {
     const key = url.searchParams.get("key");
+    const hwid = url.searchParams.get("hwid");
     if (!key) return json(res, 403, { ok: false, reason: "missing key" });
     const rec = load()[h(key)];
     if (!rec || (rec.expiresAt && now() > rec.expiresAt)) return json(res, 403, { ok: false, reason: "invalid or expired key" });
+    if (rec.hwid && (!hwid || rec.hwid !== hwid)) return json(res, 403, { ok: false, reason: "hwid mismatch" });
+    if (!rec.hwid && hwid) { rec.hwid = hwid; rec.expiresAt = now() + rec.hours * 3600 * 1000; rec.activatedAt = now(); save(load()); }
     try {
-      let body = readFileSync(KEYED_SCRIPT_PATH, "utf8");
-      body = body.replace("__LICENSE_KEY__", key); // inject the caller's key
-      res.writeHead(200, { "Content-Type": "text/x-shellscript", "Cache-Control": "no-store" });
-      res.end(body);
+      res.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
+      res.end(readFileSync(KEYED_SCRIPT_PATH, "utf8")); // base64 blob of runtime
     } catch {
-      json(res, 500, { ok: false, reason: "script not configured" });
+      json(res, 500, { ok: false, reason: "runtime not configured" });
     }
     return;
+  }
+
+  // Admin: issue / reset / list keys from anywhere (macOS CLI).
+  if (req.method === "POST" && url.pathname === "/api/issue") {
+    const b = await readBody(req);
+    if (!requireKey(b.admin)) return json(res, 403, { ok: false, reason: "bad admin token" });
+    const db = load();
+    if (b.action === "list") {
+      const out = Object.entries(db).map(([kh, r]) => ({ key: r.key, hwid: r.hwid ? r.hwid.slice(0, 12) : null, expiresAt: r.expiresAt, hours: r.hours }));
+      return json(res, 200, { ok: true, keys: out });
+    }
+    if (b.action === "reset" && b.key) { const r = db[h(b.key)]; if (r) { r.hwid = null; r.expiresAt = null; r.activatedAt = null; save(db); } return json(res, 200, { ok: true }); }
+    if (b.action === "issue") {
+      const key = b.key || genKey();
+      const hours = Number(b.hours || 24);
+      db[h(key)] = { key, hours, hwid: null, expiresAt: null, activatedAt: null, issuedAt: now() };
+      save(db);
+      return json(res, 200, { ok: true, key, hours });
+    }
+    return json(res, 400, { ok: false, reason: "bad action" });
   }
 
   json(res, 404, { ok: false, reason: "not found" });
@@ -136,10 +169,9 @@ function admin() {
   }
   process.exit(0);
 }
-function require_crypto() {
-  const random = [];
+function genKey() {
   const cs = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  for (let i = 0; i < 4; i++) { let s = ""; for (let j = 0; j < 4; j++) s += cs[Math.floor(Math.random() * cs.length)]; random.push(s); }
-  return random.join("-");
+  const p = () => { let s = ""; for (let j = 0; j < 4; j++) s += cs[Math.floor(Math.random() * cs.length)]; return s; };
+  return p() + "-" + p() + "-" + p() + "-" + p();
 }
 if (cmd) admin();
