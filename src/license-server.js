@@ -124,6 +124,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, keys: out });
     }
     if (b.action === "reset" && b.key) { const r = db[h(b.key)]; if (r) { r.hwid = null; r.expiresAt = null; r.activatedAt = null; save(db); } return json(res, 200, { ok: true }); }
+    if (b.action === "delete" && b.key) { delete db[h(b.key)]; save(db); return json(res, 200, { ok: true, deleted: b.key }); }
     if (b.action === "issue") {
       const key = b.key || genKey();
       const hours = Number(b.hours || 24);

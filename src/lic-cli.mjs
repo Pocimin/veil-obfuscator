@@ -43,8 +43,14 @@ async function call(body) {
       const r = await call({ action: "reset", key });
       if (r.ok) console.log(`[+] reset ${key} (can re-bind)`);
       else console.log("[✗]", r.reason || "failed");
+    } else if (action === "delete") {
+      const key = arg("--key");
+      if (!key) return console.log("usage: delete --key <key>");
+      const r = await call({ action: "delete", key });
+      if (r.ok) console.log(`[−] deleted ${key}`);
+      else console.log("[✗]", r.reason || "failed");
     } else {
-      console.log("usage: node lic-cli.mjs issue --hours <N> [--key CUSTOM] | list | reset --key KEY");
+      console.log("usage: node lic-cli.mjs issue --hours <N> [--key CUSTOM] | list | reset --key KEY | delete --key KEY");
       console.log("env: LIC_SVR (default http://20.188.120.231:8095), LIC_ADMIN (required)");
     }
   } catch (e) {
