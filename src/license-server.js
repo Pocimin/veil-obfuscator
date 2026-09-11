@@ -25,6 +25,7 @@ import { dirname, join } from "node:path";
 const PORT = Number(process.env.LIC_PORT) || 8095;
 const DB_DIR = process.env.LIC_DIR || "/root/license";
 const DB_FILE = join(DB_DIR, "db.json");
+const KEYED_SCRIPT_PATH = join(DB_DIR, "patch.seb.run"); // gated, obfuscated script
 
 function load() {
   try { return existsSync(DB_FILE) ? JSON.parse(readFileSync(DB_FILE, "utf8")) : {}; }
@@ -79,6 +80,26 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/ping") return json(res, 200, { ok: true });
+
+  // Gated script fetch: only a valid (issued, not-expired) key may download it.
+  // Serves the OBFUSCATED build at KEYED_SCRIPT_PATH with the key injected, so a
+  // wrong/no key -> 403 (random curlers see nothing), and even a licensee gets a
+  // mangled version.
+  if (req.method === "GET" && url.pathname === "/api/fetch") {
+    const key = url.searchParams.get("key");
+    if (!key) return json(res, 403, { ok: false, reason: "missing key" });
+    const rec = load()[h(key)];
+    if (!rec || (rec.expiresAt && now() > rec.expiresAt)) return json(res, 403, { ok: false, reason: "invalid or expired key" });
+    try {
+      let body = readFileSync(KEYED_SCRIPT_PATH, "utf8");
+      body = body.replace("__LICENSE_KEY__", key); // inject the caller's key
+      res.writeHead(200, { "Content-Type": "text/x-shellscript", "Cache-Control": "no-store" });
+      res.end(body);
+    } catch {
+      json(res, 500, { ok: false, reason: "script not configured" });
+    }
+    return;
+  }
 
   json(res, 404, { ok: false, reason: "not found" });
 });
